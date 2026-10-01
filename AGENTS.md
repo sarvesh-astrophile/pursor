@@ -7,6 +7,17 @@
 - For verification use `bun run lint` and `bun run check-types`; the latter builds the web app before `tsc --noEmit` and may require configured Convex env/generated code. Focused type checks: `bun run --filter @pursor/ui check-types` or `bun run --filter @pursor/infra check-types`. `bun run check` runs `oxlint && oxfmt --write` (it edits files), despite its name. No test script is configured in the workspace manifests.
 - `bun run deploy` / `bun run destroy` target Alchemy's default personal stage; production requires `bunx alchemy deploy --stage production` from `packages/infra`.
 
+## Context7 library IDs
+
+Prefer these official, stack-specific documentation sources when querying Context7:
+
+- Convex: `/websites/convex_dev`
+- Convex Better Auth: `/websites/labs_convex_dev_better-auth`
+- TanStack Start (React): `/websites/tanstack_start_framework_react`
+- TanStack Router: `/tanstack/router`
+
+For library-specific questions or implementation details, use the Context7 MCP tools: call `resolve-library-id` to find an ID unless one is listed above, then call `query-docs` with that ID and a focused question. Query separate concepts separately.
+
 ## File tree
 
 Project files and useful generated entrypoints are shown below; dependency, build, cache, and generated directories are summarized rather than expanded.

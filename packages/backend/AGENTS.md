@@ -11,3 +11,5 @@ Convex agent skills for common tasks can be installed by running
 `npx convex ai-files install`.
 
 <!-- convex-ai-end -->
+
+For current Convex or Convex Better Auth documentation, use the Context7 MCP tools: call `query-docs` with `/websites/convex_dev` or `/websites/labs_convex_dev_better-auth` and a focused question. For other libraries, call `resolve-library-id` first, then `query-docs`. Follow the generated Convex guidelines above when working on backend code.
