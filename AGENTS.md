@@ -1,6 +1,6 @@
 # Repository notes
 
-- Bun workspace (`apps/*`, `packages/*`); run commands from the root unless a package is specified. `bun run dev` starts the workspace dev tasks (Convex and Alchemy); `bun run dev:web` starts only the bare web Vite server. First-time Convex setup: `bun run dev:setup`, then put the Convex URLs in `apps/web/.env` as required by `apps/web/.env.schema`.
+- Bun workspace (`apps/*`, `packages/*`); run commands from the root unless a package is specified. `bun run dev` starts the web Vite server and Convex; `bun run dev:web` starts only the web Vite server. Run `bun run --filter @pursor/infra dev` for Alchemy/Cloudflare development separately. First-time Convex setup: `bun run dev:setup`, then put the Convex URLs in `apps/web/.env` as required by `apps/web/.env.schema`.
 - `apps/web` is TanStack Start on port 3001. Routes live under `apps/web/src/routes`; `src/router.tsx` wires Convex into TanStack Query/Router, and `src/routes/__root.tsx` provides SSR auth context. `apps/web/src/routeTree.gen.ts` is generated; edit route files instead.
 - `packages/backend/convex` owns Convex functions, auth and schema; read its `AGENTS.md` before working there. Convex-generated code under `convex/_generated` is ignored; run the backend dev/setup task to generate it. `packages/ui` supplies shared components via `@pursor/ui/components/*` and styles via `@pursor/ui/globals.css`; `packages/infra/alchemy.run.ts` deploys the web app to Cloudflare.
 - Bun's automatic `.env` loading is disabled (`bunfig.toml`). Web env contracts live in `apps/web/.env.schema`; after changing it, run `bun run env:generate` to refresh `apps/web/src/env.ts`. Web public Convex values are read through `src/env.public.ts`; Alchemy loads deployment env from `packages/infra/.env.schema` via Varlock. Run standalone Varlock tools from the owning package directory.
@@ -31,7 +31,7 @@ pursor/
 │       ├── .gitignore                 # App-specific build/env ignore rules
 │       ├── bunfig.toml                # Disables Bun's automatic .env loading
 │       ├── components.json            # App shadcn aliases
-│       ├── package.json               # Web build, dev:bare, typecheck scripts
+│       ├── package.json               # Web build, dev, dev:bare, typecheck scripts
 │       ├── tsconfig.json              # Web TS aliases (@/* and shared UI)
 │       ├── vite.config.ts             # TanStack Start, React, Tailwind, port 3001
 │       ├── public/
