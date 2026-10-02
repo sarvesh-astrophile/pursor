@@ -42,6 +42,30 @@ bun run dev
 Open [http://localhost:3001](http://localhost:3001) in your browser to see the web application.
 Your app will connect to the Convex cloud backend automatically.
 
+## GitHub Authentication
+
+Both authentication forms offer **Continue with GitHub**, using Better Auth's built-in GitHub social provider and the existing Convex component.
+
+1. Create an OAuth app in [GitHub Developer Settings](https://github.com/settings/developers).
+2. For local development, set the homepage URL to `http://localhost:3001` and the authorization callback URL to `http://localhost:3001/api/auth/callback/github`.
+3. In the Convex dashboard, select your development deployment and configure these environment variables:
+
+   | Variable               | Value                                 |
+   | ---------------------- | ------------------------------------- |
+   | `SITE_URL`             | `http://localhost:3001`               |
+   | `GITHUB_CLIENT_ID`     | Your GitHub OAuth app's client ID     |
+   | `GITHUB_CLIENT_SECRET` | Your GitHub OAuth app's client secret |
+
+4. Run `bun run dev`, open `/dashboard`, and choose **Continue with GitHub**.
+
+The provider is enabled when both GitHub credentials are configured. Without them, email/password authentication remains available and the GitHub button reports a sign-in error.
+
+GitHub credentials belong in the Convex deployment environment, not the frontend `.env` file. Keep the client secret out of source control.
+
+For production, create a separate GitHub OAuth app with your production origin as its homepage URL and `https://your-app-domain.com/api/auth/callback/github` as its authorization callback URL. Configure that app's credentials and the production `SITE_URL` on the production Convex deployment.
+
+The `/api/auth/callback/github` endpoint receives GitHub's OAuth response. After successful authentication, users are redirected to `/dashboard`; cancelled or failed authentication also returns there with an error message and a retry button.
+
 ## UI Customization
 
 React web apps in this stack share shadcn/ui primitives through `packages/ui`.
