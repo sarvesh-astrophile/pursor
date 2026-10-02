@@ -42,6 +42,43 @@ bun run dev
 Open [http://localhost:3001](http://localhost:3001) in your browser to see the web application.
 Your app will connect to the Convex cloud backend automatically.
 
+## Durable AI Agent Demo
+
+The backend combines `@convex-dev/workflow` and `@convex-dev/agent` to ask
+**“who are you”** using **DeepSeek V4.1 Flash** through
+[OpenCode Zen](https://opencode.ai/docs/zen/).
+The supported API model ID is `deepseek-v4.1-flash`.
+
+1. Get an OpenCode Zen API key from [OpenCode](https://opencode.ai/auth), with
+   billing configured and access to the model enabled.
+2. In the Convex dashboard, set `OPENCODE_API_KEY` on your development deployment.
+   This is a backend secret; it does not belong in the web app's environment.
+3. Run `bun run dev:server` from the repository root to deploy the components
+   and generate Convex types.
+4. From `packages/backend`, start the demo:
+
+   ```bash
+   bunx convex run agentDemo:start '{}'
+   ```
+
+   This returns a workflow ID immediately. Use it to check progress:
+
+   ```bash
+   bunx convex run agentDemo:status '{"workflowId":"YOUR_WORKFLOW_ID"}'
+   ```
+
+   Repeat the status call until `type` is `completed`. Its `result` contains
+   `{ threadId, text }`, including the agent's introduction. A failed run returns
+   `type: "failed"` and an `error`.
+
+The workflow durably creates a conversation thread and saves the prompt before
+running the LLM in an action step. The action has up to three attempts with
+exponential backoff; each attempt reuses the saved prompt ID. The Agent component
+persists the conversation, and the Workflow component retains progress and the
+final result. The start and status functions are internal, accessible through
+the CLI/dashboard. Workflow records remain available for inspection until cleaned
+up through the Workflow component.
+
 ## GitHub Authentication
 
 Both authentication forms offer **Continue with GitHub**, using Better Auth's built-in GitHub social provider and the existing Convex component.

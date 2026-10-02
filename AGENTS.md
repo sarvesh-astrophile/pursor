@@ -4,8 +4,18 @@
 - `apps/web` is TanStack Start on port 3001. Routes live under `apps/web/src/routes`; `src/router.tsx` wires Convex into TanStack Query/Router, and `src/routes/__root.tsx` provides SSR auth context. `apps/web/src/routeTree.gen.ts` is generated; edit route files instead.
 - `packages/backend/convex` owns Convex functions, auth and schema; read its `AGENTS.md` before working there. Convex-generated code under `convex/_generated` is ignored; run the backend dev/setup task to generate it. `packages/ui` supplies shared components via `@pursor/ui/components/*` and styles via `@pursor/ui/globals.css`; `packages/infra/alchemy.run.ts` deploys the web app to Cloudflare.
 - Bun's automatic `.env` loading is disabled (`bunfig.toml`). Web env contracts live in `apps/web/.env.schema`; after changing it, run `bun run env:generate` to refresh `apps/web/src/env.ts`. Web public Convex values are read through `src/env.public.ts`; Alchemy loads deployment env from `packages/infra/.env.schema` via Varlock. Run standalone Varlock tools from the owning package directory.
-- For verification use `bun run lint` and `bun run check-types`; the latter builds the web app before `tsc --noEmit` and may require configured Convex env/generated code. Focused type checks: `bun run --filter @pursor/ui check-types` or `bun run --filter @pursor/infra check-types`. `bun run check` runs `oxlint && oxfmt --write` (it edits files), despite its name. No test script is configured in the workspace manifests.
+- For verification use `bun run lint` and `bun run check-types`; the latter builds the web app before `tsc --noEmit` and may require configured Convex env/generated code. It does not include the backend, which has no `check-types` script: run `bunx tsc --noEmit -p convex/tsconfig.json` from `packages/backend` after generating bindings. Focused type checks: `bun run --filter @pursor/ui check-types` or `bun run --filter @pursor/infra check-types`. `bun run check` runs `oxlint && oxfmt --write` (it edits files), despite its name. No test script is configured in the workspace manifests.
 - `bun run deploy` / `bun run destroy` target Alchemy's default personal stage; production requires `bunx alchemy deploy --stage production` from `packages/infra`.
+
+## Durable AI agent
+
+- `packages/backend/convex/convex.config.ts` mounts Better Auth, `@convex-dev/agent`, and `@convex-dev/workflow`. Declare backend environment variables there and read the typed `env` from `./_generated/server`.
+- `packages/backend/convex/agentDemo.ts` implements the fixed “who are you” demo. It uses OpenCode Zen with `@ai-sdk/openai-compatible`, base URL `https://opencode.ai/zen/v1`, and API model ID `deepseek-v4.1-flash` (DeepSeek V4.1 Flash). API requests use the bare model ID; the `opencode/` prefix is for OpenCode CLI configuration.
+- Set `OPENCODE_API_KEY` in the Convex deployment environment. Keep it out of frontend env files and source control. It is optional in the env contract, but the demo requires it and reports a setup error when absent.
+- From `packages/backend`, run `bunx convex run agentDemo:start '{}'`, then `bunx convex run agentDemo:status '{"workflowId":"YOUR_WORKFLOW_ID"}'`. Start returns a workflow ID; completed status contains `result: { threadId, text }`. These entrypoints are internal and intended for CLI/dashboard use; any future public wrapper needs authentication and ownership checks.
+- Keep the workflow handler deterministic. Create the thread and save the prompt in the `prepareThread` mutation step, then call the LLM through the `generateReply` action step. With the installed Agent version, its helpers require a regular Convex context; wrap them in mutation/action steps rather than passing the workflow step context directly.
+- The action step retries up to three attempts with exponential backoff and reuses `promptMessageId` to avoid duplicating user prompts. SDK retries are disabled (`maxRetries: 0`) so the Workflow component controls retries. Agent messages and completed workflow records persist; workflow cleanup must be explicit.
+- After changing component registration or env declarations, regenerate bindings with `bunx convex codegen` from `packages/backend`. Use `bunx convex dev --once` to deploy to the configured development instance and typecheck. These commands contact the configured Convex deployment; generated files under `_generated` remain ignored.
 
 ## Context7 library IDs
 
@@ -15,6 +25,8 @@ Prefer these official, stack-specific documentation sources when querying Contex
 - Convex Better Auth: `/websites/labs_convex_dev_better-auth`
 - TanStack Start (React): `/websites/tanstack_start_framework_react`
 - TanStack Router: `/tanstack/router`
+- AI SDK: `/websites/ai-sdk_dev`
+- OpenCode: `/anomalyco/opencode`
 
 For library-specific questions or implementation details, use the Context7 MCP tools: call `resolve-library-id` to find an ID unless one is listed above, then call `query-docs` with that ID and a focused question. Query separate concepts separately.
 
@@ -84,9 +96,10 @@ pursor/
     │   ├── .agents/skills/            # Convex task-specific agent guidance
     │   └── convex/
     │       ├── README.md              # Convex starter examples
+    │       ├── agentDemo.ts           # Internal Workflow + Agent demo using OpenCode Zen / DeepSeek
     │       ├── auth.config.ts         # Better Auth provider config
     │       ├── auth.ts                # Better Auth, optional GitHub OAuth, current-user query
-    │       ├── convex.config.ts       # Better Auth component and optional GitHub env validators
+    │       ├── convex.config.ts       # Better Auth, Agent, Workflow components + typed backend env
     │       ├── healthCheck.ts         # Public health query
     │       ├── http.ts                # Registers auth HTTP routes
     │       ├── privateData.ts         # Auth-aware query
