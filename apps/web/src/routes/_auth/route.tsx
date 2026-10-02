@@ -2,6 +2,7 @@ import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
 import { useState } from "react";
 
+import AuthLoadingState from "@/components/features/auth/auth-loading";
 import SignInForm from "@/components/sign-in-form";
 import SignUpForm from "@/components/sign-up-form";
 
@@ -25,7 +26,7 @@ function AuthLayout() {
         )}
       </Unauthenticated>
       <AuthLoading>
-        <div>Loading...</div>
+        <AuthLoadingState />
       </AuthLoading>
     </>
   );
