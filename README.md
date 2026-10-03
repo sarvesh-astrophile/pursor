@@ -79,6 +79,72 @@ final result. The start and status functions are internal, accessible through
 the CLI/dashboard. Workflow records remain available for inspection until cleaned
 up through the Workflow component.
 
+## Context.dev Research Agent
+
+`packages/backend/convex/contextAgent.ts` adds a durable research agent powered
+by the same DeepSeek/OpenCode model, with three Context.dev tools:
+
+- `searchWeb`: live web search with source URLs.
+- `readPage`: read a URL as Markdown (one-hour API cache, bounded page content).
+- `lookupBrand`: retrieve company brand metadata and logos by domain.
+
+Set both `OPENCODE_API_KEY` and `CONTEXT_DEV_API_KEY` in the Convex deployment's
+environment settings. Get the Context.dev key from [Context.dev](https://context.dev).
+The Context.dev component requires its key in the env contract, so configure it
+before deploying the updated backend. Keep both keys out of frontend env files.
+
+From `packages/backend`, deploy and start a research task:
+
+```bash
+bunx convex dev --once
+bunx convex run contextAgent:start '{"prompt":"Research Convex and summarize its main features, with source links."}'
+```
+
+Use the returned workflow ID to retrieve the answer:
+
+```bash
+bunx convex run contextAgent:status '{"workflowId":"YOUR_WORKFLOW_ID"}'
+```
+
+Completed status contains `result: { threadId, text }`. For a brand lookup, try
+`{"prompt":"Look up stripe.com and summarize its brand, including logo URLs."}`.
+Each start creates a new persisted Agent thread. The model selects tools as
+needed, with at most six model steps; the last step is reserved for the answer.
+Tool calls and results are recorded in Agent messages. Context.dev itself does
+not persist scraped data in Convex.
+
+The entrypoints are internal CLI/dashboard functions. The workflow retries the
+generation action up to three attempts and reuses the saved user prompt; retries
+can repeat model and Context.dev requests and consume additional credits.
+
+## Dashboard Chat Playground
+
+Sign in and open `/dashboard` to test the Context.dev research agent. The chat
+uses TanStack AI's `useChat` with a custom Convex connection adapter; real Agent
+tool activity is delivered through Convex subscriptions as AG-UI events.
+Assistant answers appear when the durable generation action completes.
+
+- Try the **Search the web**, **Read a page**, and **Look up a brand** starter prompts.
+- Expand tool cards to inspect inputs, results, and failures.
+- Send follow-up questions in the same conversation; **New chat** creates a fresh thread.
+- Press Enter to send, or Shift+Enter for a new line.
+
+The backend requires authentication and checks chat ownership before sending or
+reading. It allows one active reply per conversation. Agent messages stay in the
+Agent component; `chatSessions` only stores ownership and current workflow metadata.
+The simple playground keeps its visible transcript in memory, so reloading the
+page starts a new chat. Backend records remain persisted.
+
+The existing Geist font imports provide the font variables used by
+`packages/ui/src/styles/typeset.css`. The `.typeset-chat` preset styles assistant
+Markdown only; tool cards and user messages keep their own styling.
+
+Run the connection adapter's integration checks from `apps/web`:
+
+```bash
+bun test src/lib/convex-chat.test.js
+```
+
 ## GitHub Authentication
 
 Both authentication forms offer **Continue with GitHub**, using Better Auth's built-in GitHub social provider and the existing Convex component.

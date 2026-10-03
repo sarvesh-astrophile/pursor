@@ -9,13 +9,20 @@
 
 ## Durable AI agent
 
-- `packages/backend/convex/convex.config.ts` mounts Better Auth, `@convex-dev/agent`, and `@convex-dev/workflow`. Declare backend environment variables there and read the typed `env` from `./_generated/server`.
+- `packages/backend/convex/convex.config.ts` mounts Better Auth, `@convex-dev/agent`, `@convex-dev/workflow`, and `@context-dot-dev/convex`. Declare backend environment variables there and read the typed `env` from `./_generated/server`.
 - `packages/backend/convex/agentDemo.ts` implements the fixed “who are you” demo. It uses OpenCode Zen with `@ai-sdk/openai-compatible`, base URL `https://opencode.ai/zen/v1`, and API model ID `deepseek-v4.1-flash` (DeepSeek V4.1 Flash). API requests use the bare model ID; the `opencode/` prefix is for OpenCode CLI configuration.
 - Set `OPENCODE_API_KEY` in the Convex deployment environment. Keep it out of frontend env files and source control. It is optional in the env contract, but the demo requires it and reports a setup error when absent.
 - From `packages/backend`, run `bunx convex run agentDemo:start '{}'`, then `bunx convex run agentDemo:status '{"workflowId":"YOUR_WORKFLOW_ID"}'`. Start returns a workflow ID; completed status contains `result: { threadId, text }`. These entrypoints are internal and intended for CLI/dashboard use; any future public wrapper needs authentication and ownership checks.
 - Keep the workflow handler deterministic. Create the thread and save the prompt in the `prepareThread` mutation step, then call the LLM through the `generateReply` action step. With the installed Agent version, its helpers require a regular Convex context; wrap them in mutation/action steps rather than passing the workflow step context directly.
 - The action step retries up to three attempts with exponential backoff and reuses `promptMessageId` to avoid duplicating user prompts. SDK retries are disabled (`maxRetries: 0`) so the Workflow component controls retries. Agent messages and completed workflow records persist; workflow cleanup must be explicit.
 - After changing component registration or env declarations, regenerate bindings with `bunx convex codegen` from `packages/backend`. Use `bunx convex dev --once` to deploy to the configured development instance and typecheck. These commands contact the configured Convex deployment; generated files under `_generated` remain ignored.
+- `packages/backend/convex/contextAgent.ts` accepts a custom research prompt and exposes `searchWeb`, `readPage`, and `lookupBrand` tools backed by `new ContextDev(components.contextDev)`. Use `createTool({ inputSchema, execute })` with the installed Agent version. Tool execution stays inside the generation action; allow multiple model steps with `stepCountIs` and reserve the final step for a tool-free answer.
+- `CONTEXT_DEV_API_KEY` is required by the component env contract and passed through `app.env.CONTEXT_DEV_API_KEY`; configure it in the Convex deployment before deploying. Research also requires `OPENCODE_API_KEY`. Run `bunx convex run contextAgent:start '{"prompt":"Research Convex with source links"}'`, then `bunx convex run contextAgent:status '{"workflowId":"YOUR_WORKFLOW_ID"}'` from `packages/backend`.
+- Context.dev does not persist scraped data in Convex, but Agent tool messages do persist. Bound tool output sizes. Workflow action retries may repeat model/tool requests and consume additional credits; prompt reuse does not make external requests exactly-once.
+- `/dashboard` hosts `apps/web/src/components/research-chat.tsx`, using TanStack AI `useChat` and `src/lib/convex-chat.ts`. The custom connection translates Convex query subscriptions into AG-UI tool events and a final assistant answer; it does not use simulated responses. Use the browser-safe `@tanstack/ai/client` entrypoint for protocol types and `EventType`.
+- `packages/backend/convex/chat.ts` exposes authenticated `send` and `progress` endpoints. `chatSessions` stores Better Auth user ownership, the Agent thread, and the active workflow/prompt order. Check ownership before reading messages or writing prompts; reject overlapping runs per session. Follow-ups reuse the Agent thread. The playground transcript is in memory and resets on page reload; backend messages remain persisted.
+- Run focused chat adapter checks with `bun test src/lib/convex-chat.test.js` from `apps/web`. They exercise the real TanStack stream processor, duplicate subscription updates, follow-up session reuse, errors, and subscription cleanup on abort.
+- `packages/ui/src/styles/typeset.css` is downloaded from `https://ui.shadcn.com/typeset.css` and imported after Tailwind in `globals.css`. The `.typeset-chat` preset and existing Geist font imports style dashboard assistant Markdown. Keep tool cards and other surfaces outside the Typeset container.
 
 ## Context7 library IDs
 
@@ -27,6 +34,8 @@ Prefer these official, stack-specific documentation sources when querying Contex
 - TanStack Router: `/tanstack/router`
 - AI SDK: `/websites/ai-sdk_dev`
 - OpenCode: `/anomalyco/opencode`
+- Context.dev: `/websites/context_dev`
+- TanStack AI: `/tanstack/ai`
 
 For library-specific questions or implementation details, use the Context7 MCP tools: call `resolve-library-id` to find an ID unless one is listed above, then call `query-docs` with that ID and a focused question. Query separate concepts separately.
 
@@ -84,7 +93,7 @@ pursor/
 │               ├── index.tsx          # Home route + Convex health query
 │               ├── _auth/
 │               │   ├── route.tsx      # Auth layout, sign-in/up forms, session loading state
-│               │   └── dashboard.tsx  # Protected data query
+│               │   └── dashboard.tsx  # Authenticated Context.dev chat playground
 │               └── api/auth/
 │                   └── $.ts           # GET/POST Better Auth route
 └── packages/
@@ -97,13 +106,15 @@ pursor/
     │   └── convex/
     │       ├── README.md              # Convex starter examples
     │       ├── agentDemo.ts           # Internal Workflow + Agent demo using OpenCode Zen / DeepSeek
+    │       ├── contextAgent.ts        # Durable Context.dev research agent with search, page, and brand tools
+    │       ├── chat.ts                # Authenticated chat send/progress + durable reply workflow
     │       ├── auth.config.ts         # Better Auth provider config
     │       ├── auth.ts                # Better Auth, optional GitHub OAuth, current-user query
-    │       ├── convex.config.ts       # Better Auth, Agent, Workflow components + typed backend env
+    │       ├── convex.config.ts       # Better Auth, Agent, Workflow, Context.dev + typed backend env
     │       ├── healthCheck.ts         # Public health query
     │       ├── http.ts                # Registers auth HTTP routes
     │       ├── privateData.ts         # Auth-aware query
-    │       ├── schema.ts              # Empty Convex application schema
+    │       ├── schema.ts              # Chat session ownership + active workflow metadata
     │       ├── tsconfig.json
     │       └── _generated/           # Ignored Convex API/types + ai/guidelines.md
     ├── config/

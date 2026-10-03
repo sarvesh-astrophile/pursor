@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.62",
+    "@context-dot-dev/convex": "^1.0.1",
     "@convex-dev/agent": "^0.7.3",
     "@convex-dev/better-auth": "catalog:",
     "@convex-dev/workflow": "^0.4.8",
