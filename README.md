@@ -12,6 +12,15 @@ This project was created with [Better-T-Stack](https://github.com/AmanVarshney01
 - **Authentication** - Better-Auth
 - **Oxlint** - Oxlint + Oxfmt (linting & formatting)
 - **Vite+** - Unified Vite toolchain, workspace task runner, linting, and formatting
+- **PostHog** - Product analytics, AI model/tool observability, and error tracking
+
+## PostHog
+
+Analytics are integrated into the web app, Convex chat lifecycle, and AI generation
+actions. See [the PostHog setup guide](docs/posthog.md) for project tokens, identity
+stitching, transcript recording, source-map uploads, and dashboard provisioning.
+From `apps/web`, `bun run analytics:setup` provisions Usage, Performance,
+Reliability, and AI Cost dashboards once its API credentials are configured.
 
 ## Getting Started
 
@@ -30,6 +39,13 @@ bun run dev:setup
 ```
 
 Follow the prompts to create a new Convex project and connect it to your application.
+
+The PostHog component requires a token environment variable. Set your project
+token, or an empty value to keep analytics disabled, from `packages/backend`:
+
+```bash
+bunx convex env set POSTHOG_PROJECT_TOKEN ''
+```
 
 Copy environment variables from `packages/backend/.env.local` to `apps/*/.env`.
 

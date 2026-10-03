@@ -6,12 +6,18 @@ import {
   syncStreams,
 } from "@convex-dev/agent";
 import type { UIMessageChunk } from "ai";
-import { WorkflowManager, vWorkflowId, type WorkflowId } from "@convex-dev/workflow";
+import {
+  WorkflowManager,
+  vWorkflowId,
+  vResultValidator,
+  type WorkflowId,
+} from "@convex-dev/workflow";
 import { v } from "convex/values";
 
 import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { env, mutation, query } from "./_generated/server";
+import { env, mutation, query, internalMutation } from "./_generated/server";
+import { captureEvent } from "./posthog";
 import { authComponent } from "./auth";
 import { readChatStream, type ChatToolProgress } from "./lib/chatStream";
 
@@ -19,11 +25,21 @@ const workflow = new WorkflowManager(components.workflow);
 
 export const send = mutation({
   args: { sessionId: v.optional(v.id("chatSessions")), prompt: v.string() },
-  returns: v.object({ sessionId: v.id("chatSessions"), workflowId: vWorkflowId }),
+  returns: v.object({
+    sessionId: v.id("chatSessions"),
+    workflowId: vWorkflowId,
+    turnId: v.id("researchTurns"),
+    threadId: v.string(),
+  }),
   handler: async (
     ctx,
     args,
-  ): Promise<{ sessionId: Id<"chatSessions">; workflowId: WorkflowId }> => {
+  ): Promise<{
+    sessionId: Id<"chatSessions">;
+    workflowId: WorkflowId;
+    turnId: Id<"researchTurns">;
+    threadId: string;
+  }> => {
     const user = await authComponent.getAuthUser(ctx);
     if (!env.OPENCODE_API_KEY || !env.CONTEXT_DEV_API_KEY) {
       throw new Error("Configure OPENCODE_API_KEY and CONTEXT_DEV_API_KEY in Convex to use chat.");
@@ -48,18 +64,50 @@ export const send = mutation({
       threadId: session.threadId,
       prompt,
     });
-    const workflowId = await workflow.start(ctx, internal.chat.reply, {
+    // Convex seeds Math.random deterministically for transaction retries.
+    const hex = (length: number) =>
+      Array.from({ length }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+    const turnId = await ctx.db.insert("researchTurns", {
+      ownerId: user._id,
+      sessionId,
       threadId: session.threadId,
       promptMessageId: messageId,
+      traceId: hex(32),
+      rootSpanId: hex(16),
+      attempts: 0,
+      status: "running",
     });
+    const workflowId = await workflow.start(
+      ctx,
+      internal.chat.reply,
+      {
+        threadId: session.threadId,
+        promptMessageId: messageId,
+        turnId,
+      },
+      { startAsync: true, onComplete: internal.chat.complete, context: { turnId } },
+    );
+    await ctx.db.patch(turnId, { workflowId });
     await ctx.db.patch(sessionId, { workflowId, promptOrder: message.order });
-    return { sessionId, workflowId };
+    await captureEvent(ctx, user._id, "research_turn_started", {
+      session_id: sessionId,
+      conversation_id: session.threadId,
+      turn_id: turnId,
+      workflow_id: workflowId,
+      prompt_length: prompt.length,
+      is_follow_up: !!args.sessionId,
+    });
+    return { sessionId, workflowId, turnId, threadId: session.threadId };
   },
 });
 
 export const reply = workflow
   .define({
-    args: { threadId: v.string(), promptMessageId: v.string() },
+    args: {
+      threadId: v.string(),
+      promptMessageId: v.string(),
+      turnId: v.optional(v.id("researchTurns")),
+    },
     returns: v.string(),
   })
   .handler(async (step, args): Promise<string> => {
@@ -67,6 +115,51 @@ export const reply = workflow
       retry: { maxAttempts: 3, initialBackoffMs: 1_000, base: 2 },
     });
   });
+
+export const complete = internalMutation({
+  args: {
+    workflowId: vWorkflowId,
+    result: vResultValidator,
+    context: v.object({ turnId: v.id("researchTurns") }),
+  },
+  returns: v.null(),
+  handler: async (ctx, { workflowId, result, context }) => {
+    const turn = await ctx.db.get(context.turnId);
+    if (!turn || turn.workflowId !== workflowId || turn.status !== "running") return null;
+    const status =
+      result.kind === "success" ? "completed" : result.kind === "failed" ? "failed" : "canceled";
+    const finishedAt = Date.now();
+    await ctx.db.patch(turn._id, { status, finishedAt });
+    await captureEvent(
+      ctx,
+      turn.ownerId,
+      status === "completed"
+        ? "research_turn_completed"
+        : status === "failed"
+          ? "research_turn_failed"
+          : "research_turn_canceled",
+      {
+        session_id: turn.sessionId,
+        conversation_id: turn.threadId,
+        turn_id: turn._id,
+        workflow_id: workflowId,
+        attempts: turn.attempts,
+        duration_ms: finishedAt - turn._creationTime,
+        status,
+      },
+    );
+    if (env.POSTHOG_PROJECT_TOKEN) {
+      try {
+        await ctx.scheduler.runAfter(0, internal.researchGeneration.finishTrace, {
+          turnId: turn._id,
+        });
+      } catch (error) {
+        console.warn("PostHog turn trace scheduling failed", error);
+      }
+    }
+    return null;
+  },
+});
 
 export const progress = query({
   args: { sessionId: v.id("chatSessions") },

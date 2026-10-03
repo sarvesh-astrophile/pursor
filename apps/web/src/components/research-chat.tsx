@@ -53,11 +53,12 @@ import {
   Search,
   Sparkles,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { createConvexChatConnection } from "@/lib/convex-chat";
+import { captureBrowserException, captureResearchEvent } from "@/lib/posthog";
 
 const suggestions = [
   {
@@ -117,7 +118,13 @@ function toolInputPreview(input: string): string {
 export function ResearchChat() {
   const [conversation, setConversation] = useState(0);
   return (
-    <ChatConversation key={conversation} onNewChat={() => setConversation((value) => value + 1)} />
+    <ChatConversation
+      key={conversation}
+      onNewChat={() => {
+        captureResearchEvent("research_chat_reset");
+        setConversation((value) => value + 1);
+      }}
+    />
   );
 }
 
@@ -204,7 +211,15 @@ function ChatMessage({
                     {failed ? "Failed" : finished ? "Done" : running ? "Running" : "Interrupted"}
                   </span>
                 </div>
-                <details className="group border-t">
+                <details
+                  className="group border-t"
+                  onToggle={(event) => {
+                    if (event.currentTarget.open)
+                      captureResearchEvent("research_tool_details_opened", {
+                        tool_name: part.name,
+                      });
+                  }}
+                >
                   <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-xs text-muted-foreground hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
                     View tool call{" "}
                     <ChevronDown className="size-3 transition-transform group-open:rotate-180" />
@@ -243,6 +258,9 @@ function ChatConversation({ onNewChat }: { onNewChat: () => void }) {
   const convex = useConvex();
   const connection = useMemo(() => createConvexChatConnection(convex), [convex]);
   const { messages, sendMessage, isLoading, error } = useChat({ connection });
+  useEffect(() => {
+    if (error) captureBrowserException(error, { category: "chat_rendering" });
+  }, [error]);
   const [input, setInput] = useState("");
   const composer = useRef<HTMLTextAreaElement>(null);
   const lastUserId = [...messages].reverse().find((message) => message.role === "user")?.id;
@@ -253,6 +271,10 @@ function ChatConversation({ onNewChat }: { onNewChat: () => void }) {
 
   function send(text: string) {
     if (!text.trim() || isLoading) return;
+    captureResearchEvent("research_send_clicked", {
+      prompt_length: text.trim().length,
+      is_follow_up: messages.length > 0,
+    });
     setInput("");
     void sendMessage(text.trim()).catch(() => {
       /* useChat exposes the error below. */
@@ -309,7 +331,13 @@ function ChatConversation({ onNewChat }: { onNewChat: () => void }) {
                     <button
                       key={title}
                       disabled={isLoading}
-                      onClick={() => send(prompt)}
+                      onClick={() => {
+                        captureResearchEvent("research_prompt_selected", {
+                          prompt_kind: title,
+                          source: "starter",
+                        });
+                        send(prompt);
+                      }}
                       className="flex flex-col items-start gap-2 rounded-xl border bg-background p-3 text-left transition-colors hover:bg-muted"
                     >
                       <Icon className="size-4 text-muted-foreground" />
@@ -414,6 +442,10 @@ function ChatConversation({ onNewChat }: { onNewChat: () => void }) {
                         <DropdownMenuItem
                           key={title}
                           onClick={() => {
+                            captureResearchEvent("research_prompt_selected", {
+                              prompt_kind: title,
+                              source: "composer",
+                            });
                             setInput(prompt);
                             composer.current?.focus();
                           }}

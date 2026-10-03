@@ -6,22 +6,35 @@
   "author": "",
   "scripts": {
     "dev": "convex dev",
-    "dev:setup": "convex dev --configure --until-success"
+    "dev:setup": "convex dev --configure --until-success",
+    "test": "vitest run"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.62",
+    "@ai-sdk/otel": "^1.0.127",
     "@context-dot-dev/convex": "^1.0.1",
     "@convex-dev/agent": "^0.7.3",
     "@convex-dev/better-auth": "catalog:",
     "@convex-dev/workflow": "^0.4.8",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/context-async-hooks": "^2.11.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
+    "@opentelemetry/resources": "^2.11.0",
+    "@opentelemetry/sdk-trace-base": "^2.11.0",
+    "@posthog/ai": "^8.13.4",
+    "@posthog/convex": "^2.1.5",
     "ai": "^7.0.127",
     "better-auth": "catalog:",
     "convex": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
     "@pursor/config": "workspace:*",
     "@types/node": "catalog:",
-    "typescript": "catalog:"
+    "convex-test": "^0.0.60",
+    "typescript": "catalog:",
+    "vite": "^8.2.2",
+    "vitest": "^5.0.3"
   }
 }

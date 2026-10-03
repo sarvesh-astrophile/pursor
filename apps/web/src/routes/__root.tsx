@@ -8,13 +8,18 @@ import {
   Scripts,
   createRootRouteWithContext,
   useRouteContext,
+  ErrorComponent,
+  type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { createServerFn } from "@tanstack/react-start";
+import { useEffect } from "react";
 
 import { ThemeProvider, useTheme } from "@/components/theme-provider";
 import { authClient } from "@/lib/auth-client";
 import { getToken } from "@/lib/auth-server";
+import { AnalyticsProvider } from "@/components/analytics-provider";
+import { captureBrowserException } from "@/lib/posthog";
 
 import Header from "../components/header";
 
@@ -52,6 +57,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
   }),
 
   component: RootDocument,
+  errorComponent: RootError,
   beforeLoad: async (ctx) => {
     const token = await getAuth();
     if (token) {
@@ -78,18 +84,27 @@ function RootDocument() {
         </head>
         <body>
           <ThemeProvider defaultTheme="dark" storageKey="theme">
-            <div className="grid h-svh grid-rows-[auto_1fr]">
-              <Header />
-              <Outlet />
-            </div>
-            <ThemedToaster />
-            <TanStackRouterDevtools position="bottom-left" />
+            <AnalyticsProvider>
+              <div className="grid h-svh grid-rows-[auto_1fr]">
+                <Header />
+                <Outlet />
+              </div>
+              <ThemedToaster />
+              <TanStackRouterDevtools position="bottom-left" />
+            </AnalyticsProvider>
           </ThemeProvider>
           <Scripts />
         </body>
       </html>
     </ConvexBetterAuthProvider>
   );
+}
+
+function RootError(props: ErrorComponentProps) {
+  useEffect(() => {
+    captureBrowserException(props.error, { category: "route_rendering" });
+  }, [props.error]);
+  return <ErrorComponent {...props} />;
 }
 
 function ThemedToaster() {

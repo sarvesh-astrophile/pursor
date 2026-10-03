@@ -4,6 +4,7 @@ import { EventType, type StreamChunk } from "@tanstack/ai/client";
 import type { ConnectConnectionAdapter } from "@tanstack/ai-react";
 import type { ConvexReactClient } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
+import { captureBrowserException, captureResearchEvent } from "./posthog";
 
 type Progress = FunctionReturnType<typeof api.chat.progress>;
 
@@ -22,7 +23,14 @@ export function createConvexChatConnection(client: ConvexReactClient): ConnectCo
             ? latest.content
             : "";
       if (!prompt || signal?.aborted) return;
-      const started = await client.mutation(api.chat.send, { sessionId, prompt });
+      const submittedAt = Date.now();
+      let started: FunctionReturnType<typeof api.chat.send>;
+      try {
+        started = await client.mutation(api.chat.send, { sessionId, prompt });
+      } catch (error) {
+        captureBrowserException(error, { category: "chat_submission", session_id: sessionId });
+        throw error;
+      }
       sessionId = started.sessionId;
       const threadId = runContext?.threadId ?? sessionId;
       const runId = runContext?.runId ?? crypto.randomUUID();
@@ -52,6 +60,7 @@ export function createConvexChatConnection(client: ConvexReactClient): ConnectCo
       let emittedText = "";
       let textStarted = false;
       let streamId: string | null = null;
+      let firstTextVisible = false;
       try {
         while (!signal?.aborted) {
           const progress = queue.shift();
@@ -117,6 +126,16 @@ export function createConvexChatConnection(client: ConvexReactClient): ConnectCo
           }
           const text = progress.text ?? "";
           if (text.startsWith(emittedText) && text.length > emittedText.length) {
+            if (!firstTextVisible) {
+              firstTextVisible = true;
+              captureResearchEvent("research_reply_first_visible", {
+                session_id: sessionId,
+                workflow_id: started.workflowId,
+                turn_id: started.turnId,
+                conversation_id: started.threadId,
+                latency_ms: Date.now() - submittedAt,
+              });
+            }
             if (!textStarted) {
               yield { type: EventType.TEXT_MESSAGE_START, messageId, role: "assistant" };
               textStarted = true;
@@ -137,6 +156,14 @@ export function createConvexChatConnection(client: ConvexReactClient): ConnectCo
             return;
           }
         }
+      } catch (error) {
+        captureBrowserException(error, {
+          category: "chat_subscription",
+          session_id: sessionId,
+          workflow_id: started.workflowId,
+          turn_id: started.turnId,
+        });
+        throw error;
       } finally {
         unsubscribe();
         signal?.removeEventListener("abort", onAbort);

@@ -1,5 +1,4 @@
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { Agent, createThread, saveMessage } from "@convex-dev/agent";
+import { createThread, saveMessage } from "@convex-dev/agent";
 import {
   WorkflowManager,
   vWorkflowId,
@@ -64,24 +63,8 @@ export const prepareThread = internalMutation({
 export const generateReply = internalAction({
   args: { threadId: v.string(), promptMessageId: v.string() },
   returns: v.string(),
-  handler: async (ctx, { threadId, promptMessageId }): Promise<string> => {
-    if (!env.OPENCODE_API_KEY) {
-      throw new Error("Set OPENCODE_API_KEY in the Convex deployment environment first.");
-    }
-    const opencode = createOpenAICompatible({
-      name: "opencode",
-      baseURL: "https://opencode.ai/zen/v1",
-      apiKey: env.OPENCODE_API_KEY,
-    });
-    const agent = new Agent(components.agent, {
-      name: "Pursor",
-      languageModel: opencode.chatModel("deepseek-v4.1-flash"),
-      instructions:
-        "You are Pursor, a helpful AI assistant powered by DeepSeek V4.1 Flash through OpenCode Zen. Introduce yourself briefly when asked who you are.",
-    });
-    // Reuse the saved prompt on retries instead of adding another user message.
-    const result = await agent.generateText(ctx, { threadId }, { promptMessageId, maxRetries: 0 });
-    return result.text;
+  handler: async (ctx, args): Promise<string> => {
+    return await ctx.runAction(internal.researchGeneration.generateIntroduction, args);
   },
 });
 
