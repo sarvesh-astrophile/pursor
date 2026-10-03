@@ -26,7 +26,7 @@ export function createConvexChatConnection(client: ConvexReactClient): ConnectCo
       sessionId = started.sessionId;
       const threadId = runContext?.threadId ?? sessionId;
       const runId = runContext?.runId ?? crypto.randomUUID();
-      const messageId = crypto.randomUUID();
+      let messageId = crypto.randomUUID();
       yield { type: EventType.RUN_STARTED, threadId, runId };
 
       const queue: (Progress | Error)[] = [];
@@ -47,6 +47,11 @@ export function createConvexChatConnection(client: ConvexReactClient): ConnectCo
       notify();
       const called = new Set<string>();
       const completed = new Set<string>();
+      const inputs = new Map<string, string>();
+      const inputsComplete = new Set<string>();
+      let emittedText = "";
+      let textStarted = false;
+      let streamId: string | null = null;
       try {
         while (!signal?.aborted) {
           const progress = queue.shift();
@@ -60,6 +65,15 @@ export function createConvexChatConnection(client: ConvexReactClient): ConnectCo
           if (progress instanceof Error) throw progress;
           // A cached subscription snapshot may still describe the preceding turn.
           if (progress.workflowId !== started.workflowId) continue;
+          if (progress.streamId && progress.streamId !== streamId) {
+            if (textStarted) {
+              yield { type: EventType.TEXT_MESSAGE_END, messageId };
+              messageId = crypto.randomUUID();
+              textStarted = false;
+              emittedText = "";
+            }
+            streamId = progress.streamId;
+          }
           for (const tool of progress.tools) {
             if (!called.has(tool.id)) {
               called.add(tool.id);
@@ -69,8 +83,25 @@ export function createConvexChatConnection(client: ConvexReactClient): ConnectCo
                 toolCallName: tool.name,
                 parentMessageId: messageId,
               };
-              yield { type: EventType.TOOL_CALL_ARGS, toolCallId: tool.id, delta: tool.input };
-              yield { type: EventType.TOOL_CALL_END, toolCallId: tool.id };
+            }
+            const previousInput = inputs.get(tool.id) ?? "";
+            if (tool.input.startsWith(previousInput) && tool.input.length > previousInput.length) {
+              yield {
+                type: EventType.TOOL_CALL_ARGS,
+                toolCallId: tool.id,
+                delta: tool.input.slice(previousInput.length),
+              };
+              inputs.set(tool.id, tool.input);
+            }
+            if (tool.inputComplete !== false && !inputsComplete.has(tool.id)) {
+              inputsComplete.add(tool.id);
+              let input: unknown;
+              try {
+                input = JSON.parse(tool.input);
+              } catch {
+                input = tool.input;
+              }
+              yield { type: EventType.TOOL_CALL_END, toolCallId: tool.id, input };
             }
             if (tool.output !== null && !completed.has(tool.id)) {
               completed.add(tool.id);
@@ -84,13 +115,24 @@ export function createConvexChatConnection(client: ConvexReactClient): ConnectCo
               };
             }
           }
+          const text = progress.text ?? "";
+          if (text.startsWith(emittedText) && text.length > emittedText.length) {
+            if (!textStarted) {
+              yield { type: EventType.TEXT_MESSAGE_START, messageId, role: "assistant" };
+              textStarted = true;
+            }
+            yield {
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId,
+              delta: text.slice(emittedText.length),
+            };
+            emittedText = text;
+          }
           if (progress.status === "failed" || progress.status === "canceled") {
             throw new Error(progress.error ?? "Research was canceled.");
           }
           if (progress.status === "completed") {
-            yield { type: EventType.TEXT_MESSAGE_START, messageId, role: "assistant" };
-            yield { type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: progress.text ?? "" };
-            yield { type: EventType.TEXT_MESSAGE_END, messageId };
+            if (textStarted) yield { type: EventType.TEXT_MESSAGE_END, messageId };
             yield { type: EventType.RUN_FINISHED, threadId, runId };
             return;
           }

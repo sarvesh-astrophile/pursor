@@ -1,4 +1,11 @@
-import { createThread, listMessages, saveMessage } from "@convex-dev/agent";
+import {
+  createThread,
+  listMessages,
+  listStreams,
+  saveMessage,
+  syncStreams,
+} from "@convex-dev/agent";
+import type { UIMessageChunk } from "ai";
 import { WorkflowManager, vWorkflowId, type WorkflowId } from "@convex-dev/workflow";
 import { v } from "convex/values";
 
@@ -6,6 +13,7 @@ import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { env, mutation, query } from "./_generated/server";
 import { authComponent } from "./auth";
+import { readChatStream, type ChatToolProgress } from "./lib/chatStream";
 
 const workflow = new WorkflowManager(components.workflow);
 
@@ -73,13 +81,7 @@ export const progress = query({
       threadId: session.threadId,
       paginationOpts: { cursor: null, numItems: 100 },
     });
-    const tools: {
-      id: string;
-      name: string;
-      input: string;
-      output: string | null;
-      error: boolean;
-    }[] = [];
+    const tools: ChatToolProgress[] = [];
     const current = messages.page
       .filter((doc) => doc.order === session.promptOrder)
       .sort((a, b) => a.stepOrder - b.stepOrder);
@@ -91,6 +93,7 @@ export const progress = query({
             id: part.toolCallId,
             name: part.toolName,
             input: JSON.stringify(part.input),
+            inputComplete: true,
             output: null,
             error: false,
           });
@@ -108,12 +111,38 @@ export const progress = query({
         }
       }
     }
+    const streams = await listStreams(ctx, components.agent, {
+      threadId: session.threadId,
+      startOrder: session.promptOrder,
+      includeStatuses: ["streaming", "finished", "aborted"],
+    });
+    // Retries may create another stream for this prompt. Show the latest attempt.
+    const currentStreams = streams
+      .filter((item) => item.order === session.promptOrder)
+      .sort((a, b) => a.stepOrder - b.stepOrder);
+    const stream = currentStreams[currentStreams.length - 1];
+    const synced = stream
+      ? await syncStreams(ctx, components.agent, {
+          threadId: session.threadId,
+          streamArgs: { kind: "deltas", cursors: [{ streamId: stream.streamId, cursor: 0 }] },
+        })
+      : undefined;
+    const parts =
+      synced?.kind === "deltas"
+        ? ([...synced.deltas]
+            .sort((a, b) => a.start - b.start)
+            .flatMap((delta) => delta.parts) as UIMessageChunk[])
+        : [];
+    const live = readChatStream(parts);
+    const merged = new Map(tools.map((tool) => [tool.id, tool]));
+    for (const tool of live.tools) merged.set(tool.id, tool);
     return {
       workflowId: session.workflowId,
+      streamId: stream?.streamId ?? null,
       status: state.type,
-      text: state.type === "completed" ? String(state.result) : null,
+      text: live.text || (state.type === "completed" ? String(state.result) : ""),
       error: state.type === "failed" ? state.error : null,
-      tools,
+      tools: [...merged.values()],
     };
   },
 });

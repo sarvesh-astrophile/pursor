@@ -124,16 +124,18 @@ export const generateReply = internalAction({
       tools: { searchWeb, readPage, lookupBrand },
       stopWhen: stepCountIs(6),
     });
-    const result = await agent.generateText(
+    const result = await agent.streamText(
       ctx,
       { threadId },
       {
         promptMessageId,
         maxRetries: 0,
+        maxOutputTokens: 4_000,
         prepareStep: ({ stepNumber }) => ({ toolChoice: stepNumber >= 5 ? "none" : "auto" }),
       },
+      { saveStreamDeltas: { chunking: "word", throttleMs: 100 } },
     );
-    return result.text;
+    return await result.text;
   },
 });
 

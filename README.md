@@ -121,13 +121,19 @@ can repeat model and Context.dev requests and consume additional credits.
 
 Sign in and open `/dashboard` to test the Context.dev research agent. The chat
 uses TanStack AI's `useChat` with a custom Convex connection adapter; real Agent
-tool activity is delivered through Convex subscriptions as AG-UI events.
-Assistant answers appear when the durable generation action completes.
+tool activity and assistant text are delivered through Convex subscriptions as
+AG-UI events while generation is running. The Agent's `streamText` call persists
+word-chunked deltas, throttled to 100 ms; the connection emits only new text and
+tool arguments from each update.
 
 - Try the **Search the web**, **Read a page**, and **Look up a brand** starter prompts.
-- Expand tool cards to inspect inputs, results, and failures.
+- Tool cards show the live request and running/done/failed status. Expand them
+  to inspect inputs, results, and failures.
 - Send follow-up questions in the same conversation; **New chat** creates a fresh thread.
 - Press Enter to send, or Shift+Enter for a new line.
+- Use the composer's **+** menu to insert a research prompt.
+- The transcript follows the stream while you're at the bottom, preserves your
+  position when you scroll up, and offers a jump-to-latest button.
 
 The backend requires authentication and checks chat ownership before sending or
 reading. It allows one active reply per conversation. Agent messages stay in the

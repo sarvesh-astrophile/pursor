@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { StreamProcessor } from "@tanstack/ai/client";
+import { readChatStream } from "@pursor/backend/convex/lib/chatStream";
 
 import { createConvexChatConnection } from "./convex-chat";
 
@@ -121,4 +122,145 @@ test("cached results from an older workflow cannot finish a new turn", async () 
   for await (const chunk of stream) chunks.push(chunk);
   expect(chunks.find((chunk) => chunk.type === "TEXT_MESSAGE_CONTENT").delta).toBe("New answer");
   expect(mock.unsubscribed).toBe(true);
+});
+
+test("assistant text streams before completion without replaying duplicate snapshots", async () => {
+  const mock = mockClient({
+    streamId: "stream-1",
+    status: "inProgress",
+    text: "Hello",
+    error: null,
+    tools: [],
+  });
+  const connection = createConvexChatConnection(mock.client);
+  const processor = new StreamProcessor();
+  const deltas = [];
+  for await (const chunk of connection.connect([{ role: "user", content: "Say hello" }], {})) {
+    processor.processChunk(chunk);
+    if (chunk.type === "TEXT_MESSAGE_CONTENT") {
+      deltas.push(chunk.delta);
+      if (chunk.delta === "Hello") {
+        expect(processor.getMessages()[0].parts[0].content).toBe("Hello");
+        const next = {
+          streamId: "stream-1",
+          status: "inProgress",
+          text: "Hello world",
+          error: null,
+          tools: [],
+        };
+        mock.update(next);
+        mock.update(next);
+      } else {
+        mock.update({
+          streamId: "stream-1",
+          status: "completed",
+          text: "Hello world",
+          error: null,
+          tools: [],
+        });
+      }
+    }
+  }
+  expect(deltas).toEqual(["Hello", " world"]);
+  expect(processor.getMessages()[0].parts[0].content).toBe("Hello world");
+});
+
+test("native Agent chunks show a tool while arguments and its result are still arriving", async () => {
+  const chunks = [
+    { type: "tool-input-start", toolCallId: "tool-1", toolName: "searchWeb" },
+    { type: "tool-input-delta", toolCallId: "tool-1", inputTextDelta: '{"query":' },
+  ];
+  const snapshot = () => ({
+    streamId: "stream-1",
+    status: "inProgress",
+    error: null,
+    ...readChatStream(chunks),
+  });
+  const mock = mockClient(snapshot());
+  const connection = createConvexChatConnection(mock.client);
+  const processor = new StreamProcessor();
+  for await (const chunk of connection.connect([{ role: "user", content: "Search Convex" }], {})) {
+    processor.processChunk(chunk);
+    if (chunk.type === "TOOL_CALL_ARGS" && chunk.delta === '{"query":') {
+      const part = processor.getMessages()[0].parts[0];
+      expect(part.name).toBe("searchWeb");
+      expect(part.state).toBe("input-streaming");
+      chunks.push(
+        { type: "tool-input-delta", toolCallId: "tool-1", inputTextDelta: '"Convex"}' },
+        {
+          type: "tool-input-available",
+          toolCallId: "tool-1",
+          toolName: "searchWeb",
+          input: { query: "Convex" },
+        },
+      );
+      mock.update(snapshot());
+    }
+    if (chunk.type === "TOOL_CALL_END") {
+      chunks.push(
+        {
+          type: "tool-output-available",
+          toolCallId: "tool-1",
+          output: '[{"url":"https://convex.dev"}]',
+        },
+        { type: "text-delta", id: "answer-1", delta: "Found Convex." },
+      );
+      mock.update({ ...snapshot(), status: "completed" });
+    }
+  }
+  const parts = processor.getMessages()[0].parts;
+  expect(parts.find((part) => part.type === "tool-call").arguments).toBe('{"query":"Convex"}');
+  expect(parts.find((part) => part.type === "tool-call").state).toBe("complete");
+  expect(parts.find((part) => part.type === "text").content).toBe("Found Convex.");
+});
+
+test("a retry's new stream can emit a replacement answer instead of dropping its text", async () => {
+  const mock = mockClient({
+    streamId: "attempt-1",
+    status: "inProgress",
+    text: "Partial first attempt",
+    error: null,
+    tools: [],
+  });
+  const connection = createConvexChatConnection(mock.client);
+  const processor = new StreamProcessor();
+  for await (const chunk of connection.connect([{ role: "user", content: "Research" }], {})) {
+    processor.processChunk(chunk);
+    if (chunk.type === "TEXT_MESSAGE_CONTENT" && chunk.delta === "Partial first attempt") {
+      mock.update({
+        streamId: "attempt-2",
+        status: "completed",
+        text: "Successful retry",
+        error: null,
+        tools: [],
+      });
+    }
+  }
+  const text = processor
+    .getMessages()
+    .flatMap((message) => message.parts)
+    .filter((part) => part.type === "text")
+    .map((part) => part.content);
+  expect(text).toEqual(["Partial first attempt", "Successful retry"]);
+});
+
+test("native tool errors reach the transcript as failed tool calls", async () => {
+  const snapshot = readChatStream([
+    {
+      type: "tool-input-available",
+      toolCallId: "tool-1",
+      toolName: "readPage",
+      input: { url: "https://example.com" },
+    },
+    { type: "tool-output-error", toolCallId: "tool-1", errorText: "Page could not be read" },
+  ]);
+  const mock = mockClient({ ...snapshot, status: "completed", error: null });
+  const processor = new StreamProcessor();
+  for await (const chunk of createConvexChatConnection(mock.client).connect(
+    [{ role: "user", content: "Read this page" }],
+    {},
+  ))
+    processor.processChunk(chunk);
+  const tool = processor.getMessages()[0].parts.find((part) => part.type === "tool-call");
+  expect(tool.state).toBe("error");
 });
