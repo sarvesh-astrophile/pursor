@@ -13,12 +13,20 @@
 - `bun run check` runs `oxlint && oxfmt --write` and edits files despite its name.
 - Test suites use separate runners; there is no root test script. Run the relevant commands from their owning package:
 
-| Package directory  | Command                                | Coverage                                                                                                                        |
-| ------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`         | `bun run test`                         | Vitest/jsdom browser analytics, auth identity synchronization, and source-map hook tests (`*.vitest.test.{ts,tsx}`)             |
-| `apps/web`         | `bun test src/lib/convex-chat.test.js` | Real TanStack stream processing, incremental text/tools, retries, stale workflows, follow-ups, errors, and subscription cleanup |
-| `packages/backend` | `bun run test`                         | Vitest/edge-runtime Convex function tests (`convex/**/*.test.ts`) using `convex-test`                                           |
-| `packages/backend` | `bun test tests/ai-telemetry.test.js`  | Node OTel model/tool spans, retry correlation, transcript opt-out, exporter failures, and OTLP delivery                         |
+| Package directory  | Command                                | Coverage                                                                                                                                             |
+| ------------------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`         | `bun run test`                         | Vitest/jsdom route auth guards and redirects, browser analytics, auth identity synchronization, and source-map hook tests (`*.vitest.test.{ts,tsx}`) |
+| `apps/web`         | `bun test src/lib/convex-chat.test.js` | Real TanStack stream processing, incremental text/tools, retries, stale workflows, follow-ups, errors, and subscription cleanup                      |
+| `packages/backend` | `bun run test`                         | Vitest/edge-runtime Convex function tests (`convex/**/*.test.ts`) using `convex-test`                                                                |
+| `packages/backend` | `bun test tests/ai-telemetry.test.js`  | Node OTel model/tool spans, retry correlation, transcript opt-out, exporter failures, and OTLP delivery                                              |
+
+## Protected web routes
+
+- All application pages belong under `apps/web/src/routes/_auth/`. This pathless layout protects `/` and `/dashboard` through `route.tsx`'s `beforeLoad` guard using the SSR auth context from `__root.tsx`; unauthenticated users redirect to `/login` before child loaders run. Keep the Convex `Authenticated`, `Unauthenticated`, and `AuthLoading` rendering guards for live authentication changes and session loading.
+- `/` is the Projects home page, defined in `_auth/index.tsx` and rendered by `src/features/projects/components/projects-view.tsx`. The former public starter `routes/index.tsx` and `/projects` route have been removed. Put future application routes inside `_auth/` so they inherit protection.
+- `/login` and `/api/auth/*` remain public to support sign-in and authentication callbacks. `routes/login.tsx` hosts the sign-in/sign-up forms, validates the `redirect` search parameter as a same-origin path, rejects redirects back to `/login`, and defaults to `/`. Authenticated visitors are redirected to their requested destination.
+- Email sign-in/sign-up invalidate the router's auth context before navigating to the destination. GitHub sign-in uses the same destination as its callback URL and returns failures to `/login`. Preserve query parameters and hash fragments when returning users to the page they originally requested.
+- Route protection tests live in `src/lib/auth-routes.vitest.test.ts`; they cover the protected home page and dashboard, blocked child loaders, return destinations, and unsafe or looping redirects. Backend functions must continue enforcing authentication and ownership independently of frontend route guards.
 
 ## Durable AI agent
 
@@ -116,8 +124,6 @@ pursor/
 │           ├── components/
 │           │   ├── analytics-provider.tsx # Browser PostHog provider + authenticated identity sync
 │           │   ├── analytics-provider.vitest.test.tsx # Login/logout/account-switch identity tests
-│           │   ├── features/auth/
-│           │   │   └── auth-loading.tsx # Styled session-check loading state
 │           │   ├── github-sign-in-button.tsx # Shared GitHub OAuth sign-in button
 │           │   ├── header.tsx         # App navigation and theme toggle
 │           │   ├── loader.tsx         # Router pending state
@@ -127,8 +133,13 @@ pursor/
 │           │   ├── sign-up-form.tsx   # Email/password sign-up and GitHub sign-in
 │           │   ├── theme-provider.tsx # Persisted theme context and pre-hydration script
 │           │   └── user-menu.tsx
+│           ├── features/
+│           │   ├── auth/
+│           │   │   └── auth-loading.tsx # Styled session-check loading state
+│           │   └── projects/           # Projects home-page components
 │           ├── lib/
 │           │   ├── auth-client.ts     # Better Auth React client with Convex plugin
+│           │   ├── auth-routes.vitest.test.ts # Protected index/dashboard loaders and login redirect tests
 │           │   ├── auth-server.ts     # React Start auth handler/token helpers
 │           │   ├── convex-chat.ts     # Convex subscription → incremental AG-UI connection + latency metric
 │           │   ├── convex-chat.test.js # Bun tests using the real TanStack stream processor
@@ -137,9 +148,10 @@ pursor/
 │           │   └── posthog.vitest.test.ts # Browser initialization and exception tests
 │           └── routes/
 │               ├── __root.tsx         # SSR auth, theme/analytics providers, error boundary, document shell
-│               ├── index.tsx          # Home route + Convex health query
+│               ├── login.tsx          # Public sign-in/up page with validated return destination
 │               ├── _auth/
-│               │   ├── route.tsx      # Auth layout, sign-in/up forms, session loading state
+│               │   ├── route.tsx      # Shared beforeLoad auth guard, live auth gating, session loading
+│               │   ├── index.tsx      # Protected Projects home page at /
 │               │   └── dashboard.tsx  # Authenticated Context.dev chat playground
 │               └── api/auth/
 │                   └── $.ts           # GET/POST Better Auth route
@@ -331,17 +343,17 @@ export default defineSchema({
 ```
 
 - Here are the valid Convex types along with their respective validators:
-  | Convex Type | TS/JS type | Example Usage | Validator for argument validation and schemas | Notes |
+  | Convex Type | TS/JS type  | Example Usage        | Validator for argument validation and schemas | Notes                                                                                                                                                                                                  |
   | ----------- | ----------- | -------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-  | Id | string | `doc._id` | `v.id(tableName)` | |
-  | Null | null | `null` | `v.null()` | JavaScript's `undefined` is not a valid Convex value. Functions the return `undefined` or do not return will return `null` when called from a client. Use `null` instead. |
-  | Int64 | bigint | `3n` | `v.int64()` | Int64s only support BigInts between -2^63 and 2^63-1. Convex supports `bigint`s in most modern browsers. |
-  | Float64 | number | `3.1` | `v.number()` | Convex supports all IEEE-754 double-precision floating point numbers (such as NaNs). Inf and NaN are JSON serialized as strings. |
-  | Boolean | boolean | `true` | `v.boolean()` |
-  | String | string | `"abc"` | `v.string()` | Strings are stored as UTF-8 and must be valid Unicode sequences. Strings must be smaller than the 1MB total size limit when encoded as UTF-8. |
-  | Bytes | ArrayBuffer | `new ArrayBuffer(8)` | `v.bytes()` | Convex supports first class bytestrings, passed in as `ArrayBuffer`s. Bytestrings must be smaller than the 1MB total size limit for Convex types. |
-  | Array | Array | `[1, 3.2, "abc"]` | `v.array(values)` | Arrays can have at most 8192 values. |
-  | Object | Object | `{a: "abc"}` | `v.object({property: value})` | Convex only supports "plain old JavaScript objects" (objects that do not have a custom prototype). Objects can have at most 1024 entries. Field names must be nonempty and not start with "$" or "\_". |
+  | Id          | string      | `doc._id`            | `v.id(tableName)`                             |                                                                                                                                                                                                        |
+  | Null        | null        | `null`               | `v.null()`                                    | JavaScript's `undefined` is not a valid Convex value. Functions the return `undefined` or do not return will return `null` when called from a client. Use `null` instead.                              |
+  | Int64       | bigint      | `3n`                 | `v.int64()`                                   | Int64s only support BigInts between -2^63 and 2^63-1. Convex supports `bigint`s in most modern browsers.                                                                                               |
+  | Float64     | number      | `3.1`                | `v.number()`                                  | Convex supports all IEEE-754 double-precision floating point numbers (such as NaNs). Inf and NaN are JSON serialized as strings.                                                                       |
+  | Boolean     | boolean     | `true`               | `v.boolean()`                                 |
+  | String      | string      | `"abc"`              | `v.string()`                                  | Strings are stored as UTF-8 and must be valid Unicode sequences. Strings must be smaller than the 1MB total size limit when encoded as UTF-8.                                                          |
+  | Bytes       | ArrayBuffer | `new ArrayBuffer(8)` | `v.bytes()`                                   | Convex supports first class bytestrings, passed in as `ArrayBuffer`s. Bytestrings must be smaller than the 1MB total size limit for Convex types.                                                      |
+  | Array       | Array       | `[1, 3.2, "abc"]`    | `v.array(values)`                             | Arrays can have at most 8192 values.                                                                                                                                                                   |
+  | Object      | Object      | `{a: "abc"}`         | `v.object({property: value})`                 | Convex only supports "plain old JavaScript objects" (objects that do not have a custom prototype). Objects can have at most 1024 entries. Field names must be nonempty and not start with "$" or "\_". |
 
 | Record | Record | `{"a": "1", "b": "2"}` | `v.record(keys, values)` | Records are objects at runtime, but can have dynamic keys. Keys must be only ASCII characters, nonempty, and not start with "$" or "\_". |
 
