@@ -1,6 +1,7 @@
 import { Button } from "@pursor/ui/components/button";
-import { Sparkle } from "lucide-react";
 import { Kbd } from "@pursor/ui/components/kbd";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { GithubIcon, SparkleIcon } from "@hugeicons/core-free-icons";
 
 
 export const ProjectsView = () => {
@@ -17,7 +18,7 @@ export const ProjectsView = () => {
                   <div className="grid grid-cols-2 gap-2 ">
                       <Button variant="outline" className="h-full items-start p-4 bg-background border flex flex-col gap-6">
                           <div className="flex items-center w-full justify-between">
-                              <Sparkle className="size-4" />
+                              <HugeiconsIcon icon={SparkleIcon} className="size-4" />
                               <Kbd className="px-2">
                                   Cmd + J
                               </Kbd>
@@ -26,7 +27,19 @@ export const ProjectsView = () => {
                               New
                           </div>
                       </Button>
+                      <Button variant="outline" className="h-full items-start p-4 bg-background border flex flex-col gap-6">
+                          <div className="flex items-center w-full justify-between">
+                              <HugeiconsIcon icon={GithubIcon} className="" />
+                              <Kbd className="px-2">
+                                  Cmd + I
+                              </Kbd>
+                          </div>
+                          <div>
+                              Import
+                          </div>
+                      </Button>
                   </div>
+
               </div>
           </div>
     </div>
