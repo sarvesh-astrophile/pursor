@@ -4,7 +4,7 @@ import { toast } from "sonner";
 
 import { authClient } from "@/lib/auth-client";
 
-export default function GitHubSignInButton() {
+export default function GitHubSignInButton({ redirectTo = "/" }: { redirectTo?: string }) {
   const [isPending, setIsPending] = useState(false);
   const [hasOAuthError, setHasOAuthError] = useState(false);
 
@@ -18,8 +18,8 @@ export default function GitHubSignInButton() {
     try {
       const { error } = await authClient.signIn.social({
         provider: "github",
-        callbackURL: "/dashboard",
-        errorCallbackURL: "/dashboard",
+        callbackURL: redirectTo,
+        errorCallbackURL: `/login?redirect=${encodeURIComponent(redirectTo)}`,
       });
 
       if (error) {

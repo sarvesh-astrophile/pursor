@@ -2,17 +2,21 @@ import { Button } from "@pursor/ui/components/button";
 import { Input } from "@pursor/ui/components/input";
 import { Label } from "@pursor/ui/components/label";
 import { useForm } from "@tanstack/react-form";
-import { useNavigate } from "@tanstack/react-router";
+import { useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import z from "zod";
 
 import GitHubSignInButton from "@/components/github-sign-in-button";
 import { authClient } from "@/lib/auth-client";
 
-export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () => void }) {
-  const navigate = useNavigate({
-    from: "/",
-  });
+export default function SignUpForm({
+  onSwitchToSignIn,
+  redirectTo = "/",
+}: {
+  onSwitchToSignIn: () => void;
+  redirectTo?: string;
+}) {
+  const router = useRouter();
 
   const form = useForm({
     defaultValues: {
@@ -28,11 +32,10 @@ export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () 
           name: value.name,
         },
         {
-          onSuccess: () => {
-            navigate({
-              to: "/dashboard",
-            });
+          onSuccess: async () => {
             toast.success("Sign up successful");
+            await router.invalidate();
+            await router.navigate({ href: redirectTo, replace: true });
           },
           onError: (error) => {
             toast.error(error.error.message || error.error.statusText);
@@ -53,7 +56,7 @@ export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () 
     <div className="mx-auto w-full mt-10 max-w-md p-6">
       <h1 className="mb-6 text-center text-3xl font-bold">Create Account</h1>
 
-      <GitHubSignInButton />
+      <GitHubSignInButton redirectTo={redirectTo} />
       <div className="my-4 flex items-center gap-3 text-sm text-muted-foreground">
         <div className="h-px flex-1 bg-border" />
         <span>or</span>

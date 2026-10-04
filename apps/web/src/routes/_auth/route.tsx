@@ -1,17 +1,22 @@
-import { Outlet, createFileRoute } from "@tanstack/react-router";
+import { Navigate, Outlet, createFileRoute, redirect, useLocation } from "@tanstack/react-router";
 import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
-import { useState } from "react";
 
-import AuthLoadingState from "@/components/features/auth/auth-loading";
-import SignInForm from "@/components/sign-in-form";
-import SignUpForm from "@/components/sign-up-form";
+import AuthLoadingState from "@/features/auth/auth-loading";
 
 export const Route = createFileRoute("/_auth")({
+  beforeLoad: ({ context, location }) => {
+    if (!context.isAuthenticated) {
+      throw redirect({
+        to: "/login",
+        search: { redirect: location.href },
+      });
+    }
+  },
   component: AuthLayout,
 });
 
 function AuthLayout() {
-  const [showSignIn, setShowSignIn] = useState(false);
+  const location = useLocation();
 
   return (
     <>
@@ -19,11 +24,7 @@ function AuthLayout() {
         <Outlet />
       </Authenticated>
       <Unauthenticated>
-        {showSignIn ? (
-          <SignInForm onSwitchToSignUp={() => setShowSignIn(false)} />
-        ) : (
-          <SignUpForm onSwitchToSignIn={() => setShowSignIn(true)} />
-        )}
+        <Navigate to="/login" search={{ redirect: location.href }} replace />
       </Unauthenticated>
       <AuthLoading>
         <AuthLoadingState />
