@@ -82,7 +82,7 @@ function RootDocument() {
         <head>
           <HeadContent />
         </head>
-        <body>
+        <body className="antialiased">
           <ThemeProvider defaultTheme="dark" storageKey="theme">
             <AnalyticsProvider>
               <div className="grid h-svh grid-rows-[auto_1fr]">

@@ -30,6 +30,7 @@
     "@tanstack/react-start": "^1.168.49",
     "better-auth": "catalog:",
     "convex": "catalog:",
+    "date-fns": "^4.4.0",
     "lucide-react": "catalog:",
     "next-themes": "catalog:",
     "posthog-js": "^1.435.8",
@@ -40,6 +41,7 @@
     "remark-gfm": "^4.0.1",
     "sonner": "catalog:",
     "tailwindcss": "catalog:",
+    "unique-names-generator": "^4.7.1",
     "varlock": "catalog:",
     "zod": "catalog:"
   },
