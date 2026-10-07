@@ -5,5 +5,7 @@ export const Route = createFileRoute("/_auth/projects/$projectId")({
 });
 
 function RouteComponent() {
-  return <div>Hello "/_auth/projects/$projectId"!</div>;
+  const { projectId } = Route.useParams();
+
+  return <div>Project ID: {projectId}</div>;
 }
