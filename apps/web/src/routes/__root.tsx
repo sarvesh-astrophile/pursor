@@ -21,8 +21,6 @@ import { getToken } from "@/features/auth/server";
 import { AnalyticsProvider } from "@/app/analytics/analytics-provider";
 import { captureBrowserException } from "@/app/analytics/posthog";
 
-import Header from "@/app/components/header";
-
 import appCss from "../index.css?url";
 
 const getAuth = createServerFn({ method: "GET" }).handler(async () => {
@@ -85,10 +83,9 @@ function RootDocument() {
         <body className="antialiased">
           <ThemeProvider defaultTheme="dark" storageKey="theme">
             <AnalyticsProvider>
-              <div className="grid h-svh grid-rows-[auto_1fr]">
-                <Header />
-                <Outlet />
-              </div>
+              {/*<div className="grid h-svh grid-rows-[auto_1fr]">*/}
+              <Outlet />
+              {/*</div>*/}
               <ThemedToaster />
               <TanStackRouterDevtools position="bottom-left" />
             </AnalyticsProvider>

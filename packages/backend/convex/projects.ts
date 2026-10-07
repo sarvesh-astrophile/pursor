@@ -38,6 +38,39 @@ export const get = query({
   },
 });
 
+export const getById = query({
+  args: { id: v.id("projects") },
+  returns: schema.doc("projects"),
+  handler: async (ctx, args) => {
+    const user = await authComponent.getAuthUser(ctx);
+    const { id } = args;
+    const project = await ctx.db.get("projects", id);
+    if (!project) {
+      throw new Error("Project not found.");
+    }
+    if (project.ownerId !== user._id) {
+      throw new Error("Project not found.");
+    }
+    return project;
+  },
+});
+
+export const rename = mutation({
+  args: { id: v.id("projects"), name: v.string() },
+  handler: async (ctx, args) => {
+    const user = await authComponent.getAuthUser(ctx);
+    const { id, name } = args;
+    const project = await ctx.db.get("projects", id);
+    if (!project) {
+      throw new Error("Project not found.");
+    }
+    if (project.ownerId !== user._id) {
+      throw new Error("Project not found.");
+    }
+    await ctx.db.patch("projects", id, { name: name, updatedAt: Date.now() });
+  },
+});
+
 export const getPartial = query({
   args: { limit: v.number() },
   returns: v.array(schema.doc("projects")),
