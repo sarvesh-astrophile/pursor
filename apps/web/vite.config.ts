@@ -4,9 +4,20 @@ import viteReact from "@vitejs/plugin-react";
 import { defineConfig } from "vite-plus";
 import { loadEnv } from "vite";
 import { resolve } from "node:path";
+import {
+  getDefaultAutoSelectFamilyAttemptTimeout,
+  setDefaultAutoSelectFamilyAttemptTimeout,
+} from "node:net";
 import { uploadPostHogSourceMaps } from "./scripts/posthog-source-maps";
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
+  if (command === "serve") {
+    // Node's 250 ms address-selection window can expire before remote Convex
+    // connections complete on slower networks. Apply only to the local server.
+    setDefaultAutoSelectFamilyAttemptTimeout(
+      Math.max(getDefaultAutoSelectFamilyAttemptTimeout(), 2_000),
+    );
+  }
   const env = { ...loadEnv(mode, process.cwd(), ""), ...process.env };
   const uploadSourceMaps = !!env.POSTHOG_CLI_API_KEY && !!env.POSTHOG_CLI_PROJECT_ID;
   return {

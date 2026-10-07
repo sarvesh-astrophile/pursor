@@ -58,6 +58,11 @@ bun run dev
 Open [http://localhost:3001](http://localhost:3001) in your browser to see the web application.
 Your app will connect to the Convex cloud backend automatically.
 
+The local Vite server gives Node's network address-selection attempts at least
+2 seconds to connect to remote services. This avoids premature `ETIMEDOUT`
+errors on slower networks during SSR auth requests. Restart `bun run dev` after
+changing this setting in `apps/web/vite.config.ts`.
+
 ## Durable AI Agent Demo
 
 The backend combines `@convex-dev/workflow` and `@convex-dev/agent` to ask

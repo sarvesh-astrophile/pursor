@@ -3,12 +3,14 @@ import { api } from "@pursor/backend/convex/_generated/api";
 import type { Doc, Id } from "@pursor/backend/convex/_generated/dataModel";
 
 export const useProjects = () => {
-  const projects = useQuery(api.projects.get);
+  const { isAuthenticated } = useConvexAuth();
+  const projects = useQuery(api.projects.get, isAuthenticated ? {} : "skip");
   return projects;
 };
 
 export const useProjectsPartial = (limit: number) => {
-  const projects = useQuery(api.projects.getPartial, { limit });
+  const { isAuthenticated } = useConvexAuth();
+  const projects = useQuery(api.projects.getPartial, isAuthenticated ? { limit } : "skip");
   return projects;
 };
 
@@ -34,7 +36,11 @@ export const useCreateProject = () => {
 
     for (const { args, value } of localStore.getAllQueries(api.projects.getPartial)) {
       if (value !== undefined) {
-        localStore.setQuery(api.projects.getPartial, args, [...value, newProject].slice(0, args.limit));
+        localStore.setQuery(
+          api.projects.getPartial,
+          args,
+          [...value, newProject].slice(0, args.limit),
+        );
       }
     }
   });

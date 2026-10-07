@@ -9,12 +9,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@pursor/ui/components/dropdown-menu";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 
 import { authClient } from "../client";
 
 export default function UserMenu() {
-  const user = useQuery(api.auth.getCurrentUser);
+  const { isAuthenticated } = useConvexAuth();
+  const user = useQuery(api.auth.getCurrentUser, isAuthenticated ? {} : "skip");
 
   return (
     <DropdownMenu>

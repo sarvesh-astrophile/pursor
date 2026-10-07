@@ -1,6 +1,10 @@
-import { createMiddleware, createStart } from "@tanstack/react-start";
+import { createCsrfMiddleware, createMiddleware, createStart } from "@tanstack/react-start";
 
 import { captureServerException } from "@/app/analytics/posthog.server";
+
+const csrfMiddleware = createCsrfMiddleware({
+  filter: (ctx) => ctx.handlerType === "serverFn",
+});
 
 const errorTracking = createMiddleware().server(async ({ next, request }) => {
   try {
@@ -18,4 +22,6 @@ const errorTracking = createMiddleware().server(async ({ next, request }) => {
   }
 });
 
-export const startInstance = createStart(() => ({ requestMiddleware: [errorTracking] }));
+export const startInstance = createStart(() => ({
+  requestMiddleware: [errorTracking, csrfMiddleware],
+}));
