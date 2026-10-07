@@ -13,9 +13,15 @@ import { useProjectById, useRenameProject } from "../hooks/use-projects";
 import { useRef, useState } from "react";
 import { Input } from "@pursor/ui/components/input";
 import { Button } from "@pursor/ui/components/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@pursor/ui/components/tooltip";
 import { toast } from "sonner";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Edit03Icon } from "@hugeicons/core-free-icons";
+import { CloudCheckIcon, Edit03Icon, LoaderCircleIcon } from "@hugeicons/core-free-icons";
+import { formatDistanceToNow } from "date-fns";
+
+const formatTimeStamp = (timestamp: number) => {
+  return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
+};
 
 export function NavBar({ projectId }: { projectId: Id<"projects"> }) {
   const project = useProjectById(projectId);
@@ -93,14 +99,15 @@ export function NavBar({ projectId }: { projectId: Id<"projects"> }) {
                     size="sm"
                     onClick={handleStartRename}
                     disabled={!project || isSaving}
-                    className="cursor-pointer gap-1 disabled:cursor-default"
+                    className="group/rename cursor-pointer gap-1 disabled:cursor-default"
                     aria-label="Rename project"
                   >
                     <span>{project?.name ?? "Loading..."}</span>
                     {project && (
                       <HugeiconsIcon
                         icon={Edit03Icon}
-                        className="size-3.5 text-muted-foreground inline"
+                        aria-hidden="true"
+                        className="hidden size-3.5 text-muted-foreground group-hover/rename:block group-focus-visible/rename:block"
                       />
                     )}
                   </Button>
@@ -109,6 +116,34 @@ export function NavBar({ projectId }: { projectId: Id<"projects"> }) {
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
+        {project?.importStatus === "importing" ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <HugeiconsIcon
+                  icon={LoaderCircleIcon}
+                  className="size-4 animate-spin motion-reduce:animate-none"
+                />
+              }
+            />
+            <TooltipContent>
+              <p>Importing...</p>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          project?.importStatus === "completed" && (
+            <Tooltip>
+              <TooltipTrigger
+                render={<HugeiconsIcon icon={CloudCheckIcon} className="size-4" strokeWidth={1} />}
+              />
+              <TooltipContent>
+                <p>
+                  Updated {project?.updatedAt ? formatTimeStamp(project.updatedAt) : "Loading..."}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          )
+        )}
       </div>
       <UserMenu />
     </nav>
