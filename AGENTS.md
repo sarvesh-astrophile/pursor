@@ -5,6 +5,8 @@
 - `packages/backend/convex` owns Convex functions, auth and schema; read `packages/backend/AGENTS.md` and `convex/_generated/ai/guidelines.md` before working on backend code. Convex-generated code under `convex/_generated` is ignored; run the backend dev/setup task to generate it. `packages/ui` supplies shared components via `@pursor/ui/components/*` and styles via `@pursor/ui/globals.css`; `packages/infra/alchemy.run.ts` deploys the web app to Cloudflare.
 - Bun's automatic `.env` loading is disabled (`bunfig.toml`). Web env contracts live in `apps/web/.env.schema`; after changing it, run `bun run env:generate` to refresh `apps/web/src/env.ts`. Browser-safe Convex and PostHog values are read through `src/env.public.ts`; Alchemy loads deployment env from `packages/infra/.env.schema` via Varlock. Run standalone Varlock tools from the owning package directory. Backend secrets belong in the Convex deployment environment; local personal API keys belong in ignored env files.
 - `bun run deploy` / `bun run destroy` target Alchemy's default personal stage; production requires `bunx alchemy deploy --stage production` from `packages/infra`.
+- Local Vite development (`command === "serve"`) raises Node's network address-selection attempt timeout to at least 2,000 ms in `apps/web/vite.config.ts` to avoid premature SSR auth connection timeouts on slower networks. Restart the dev server after changing it.
+- `.zed/settings.json` configures the Oxc extension for Oxlint on type, safe fixes, and Oxfmt on save using the root `vite.config.ts`. Install the Oxc extension when using Zed.
 
 ## Web code organization
 
@@ -24,7 +26,7 @@
 
 | Package directory  | Command                                                  | Coverage                                                                                                                                             |
 | ------------------ | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`         | `bun run test`                                           | Vitest/jsdom route auth guards and redirects, browser analytics, auth identity synchronization, and source-map hook tests (`*.vitest.test.{ts,tsx}`) |
+| `apps/web`         | `bun run test`                                           | Vitest/jsdom route auth guards and redirects, project query auth gating, browser analytics, auth identity synchronization, and source-map hook tests (`*.vitest.test.{ts,tsx}`) |
 | `apps/web`         | `bun test src/features/research/lib/convex-chat.test.js` | Real TanStack stream processing, incremental text/tools, retries, stale workflows, follow-ups, errors, and subscription cleanup                      |
 | `packages/backend` | `bun run test`                                           | Vitest/edge-runtime Convex function tests (`convex/**/*.test.ts`) using `convex-test`                                                                |
 | `packages/backend` | `bun test tests/ai-telemetry.test.js`                    | Node OTel model/tool spans, retry correlation, transcript opt-out, exporter failures, and OTLP delivery                                              |
@@ -36,6 +38,19 @@
 - `/login` and `/api/auth/*` remain public to support sign-in and authentication callbacks. `routes/login.tsx` hosts the sign-in/sign-up forms, validates the `redirect` search parameter as a same-origin path, rejects redirects back to `/login`, and defaults to `/`. Authenticated visitors are redirected to their requested destination.
 - Email sign-in/sign-up invalidate the router's auth context before navigating to the destination. GitHub sign-in uses the same destination as its callback URL and returns failures to `/login`. Preserve query parameters and hash fragments when returning users to the page they originally requested.
 - Route protection tests live in `src/features/auth/auth-routes.vitest.test.ts`; they cover the protected home page and dashboard, blocked child loaders, return destinations, and unsafe or looping redirects. Backend functions must continue enforcing authentication and ownership independently of frontend route guards.
+- `src/router.tsx` creates `ConvexQueryClient` with `{ expectAuth: true }`. Authenticated React queries also gate arguments with `useConvexAuth().isAuthenticated`, passing `"skip"` until authenticated and after logout. Preserve this in project hooks and `features/auth/components/user-menu.tsx`; route guards alone do not gate subscriptions during live auth changes.
+- `src/start.ts` registers request middleware in the order `[errorTracking, csrfMiddleware]`. CSRF checks are filtered to `ctx.handlerType === "serverFn"`; preserve that scope when changing server middleware.
+
+## Projects home and navigation
+
+- `features/projects/components/projects-view.tsx` composes project creation, the recent-project list, and the search dialog. New projects receive a hyphen-separated adjective/animal/color name from `unique-names-generator` and are created through `useCreateProject`; creation currently updates the list without navigating.
+- `features/projects/hooks/use-projects.ts` owns `useProjects`, `useProjectsPartial(limit)`, and `useCreateProject`. The create hook performs optimistic updates only when the current user is available, adds a temporary `Doc<"projects">` with a UUID cast to `Id<"projects">`, and updates cached full/partial lists with their existing bounds (100 or the query's limit).
+- `packages/backend/convex/projects.ts` exposes authenticated `create`, `get`, and `getPartial`. Ownership comes from `authComponent.getAuthUser(ctx)`, never client arguments. Creation trims names and rejects empty names; `get` returns at most 100 projects and `getPartial` requires a positive safe-integer limit. Both query `by_ownerId` in descending order, which orders by creation time, not `updatedAt`.
+- The `projects` table requires `name`, Better Auth `ownerId`, and numeric `updatedAt`; optional import/export status fields and `exportRepoURL` also live there. Preserve the `by_ownerId` index and required timestamp on writes.
+- `projects-list.tsx` requests six projects, puts the first in the Continue card, and displays the remainder as recent links. The Continue card, recent links, and search selections navigate to `/projects/$projectId`. `_auth/projects.$projectId.tsx` is a protected placeholder with no project loader or detail functionality yet.
+- `project-command-dialog.tsx` searches the full bounded project list locally by project name using shared Command components, distinguishes loading from empty results, and closes on selection. Project icons reflect import state: GitHub for completed, a spinner for importing, an alert for failed, and a globe otherwise. Relative timestamps use `date-fns` and `updatedAt`.
+- Keyboard shortcuts use `@tanstack/react-hotkeys`: `Mod+J` creates a project (disabled while search is open and ignored in inputs), and `Mod+K` opens search (including from inputs). Preserve `preventDefault`, `requireReset`, and matching `aria-keyshortcuts`. The GitHub Import card and its displayed `Cmd + I` hint are placeholders with no import handler or registered shortcut.
+- `features/projects/hooks/use-projects.vitest.test.ts` covers query skipping during auth loading, unauthenticated state, and logout, plus authenticated query arguments and changing recent-project limits.
 
 ## Durable AI agent
 
@@ -103,6 +118,7 @@ pursor/
 ├── .oxlintrc.json                     # Oxlint configuration
 ├── .oxfmtrc.json                      # Oxfmt configuration
 ├── .gitignore                         # Ignore rules for env, builds, and generated files
+├── .zed/settings.json                 # Zed Oxc lint/format integration
 ├── docs/
 │   └── posthog.md                     # PostHog setup, dev dashboard links, tracing, errors, source maps
 ├── apps/
@@ -157,10 +173,12 @@ pursor/
 │           │   │   └── auth-routes.vitest.test.ts # Protected loaders and login redirects
 │           │   ├── projects/
 │           │   │   ├── components/
-│           │   │   │   ├── project-command-dialog.tsx
-│           │   │   │   ├── projects-list.tsx
-│           │   │   │   └── projects-view.tsx
-│           │   │   └── hooks/use-projects.ts
+│           │   │   │   ├── project-command-dialog.tsx # Bounded project search and navigation
+│           │   │   │   ├── projects-list.tsx # Continue card, recent links, search shortcut
+│           │   │   │   └── projects-view.tsx # Project creation, import placeholder, search dialog
+│           │   │   └── hooks/
+│           │   │       ├── use-projects.ts # Auth-gated queries and optimistic creation
+│           │   │       └── use-projects.vitest.test.ts # Query auth gating and limits
 │           │   └── research/
 │           │       ├── components/
 │           │       │   ├── research-chat.tsx # Conversation reset/lifecycle
@@ -210,7 +228,8 @@ pursor/
     │       ├── researchGeneration.ts  # Node model/tool generation, streaming, telemetry, trace finalization
     │       ├── researchTelemetry.ts   # Validated turn attempts + internal turn lookup
     │       ├── researchTelemetry.test.ts # convex-test attempt validation and completion idempotency
-    │       ├── schema.ts              # chatSessions ownership/workflow + researchTurns correlation/status
+    │       ├── projects.ts            # Authenticated project creation and bounded owner lists
+    │       ├── schema.ts              # chatSessions, researchTurns, and owner-indexed projects
     │       ├── tsconfig.json
     │       └── _generated/            # Ignored Convex API/types + ai/guidelines.md
     ├── config/
