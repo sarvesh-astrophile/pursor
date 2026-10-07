@@ -4,6 +4,6 @@ export const Route = createFileRoute("/_auth/projects/$projectId")({
   component: ProjectPage,
 });
 
-function ProjectPage() {
-  return null;
+function ProjectPage({ projectId }: { projectId: string }) {
+  return <div>Hi project {projectId}</div>;
 }
