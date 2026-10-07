@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import { api } from "@pursor/backend/convex/_generated/api";
 import type { Doc, Id } from "@pursor/backend/convex/_generated/dataModel";
+import { useCallback } from "react";
 
 export const useProjectById = (id: Id<"projects">) => {
   const { isAuthenticated } = useConvexAuth();
@@ -53,7 +54,7 @@ export const useCreateProject = () => {
   return createProject;
 };
 
-export const useRenameProject = () => {
+export const useRenameProject = (projectId: Id<"projects">) => {
   const { isAuthenticated } = useConvexAuth();
   const user = useQuery(api.auth.getCurrentUser, isAuthenticated ? {} : "skip");
   const renameProject = useMutation(api.projects.rename).withOptimisticUpdate((localStore, arg) => {
@@ -81,5 +82,8 @@ export const useRenameProject = () => {
       }
     }
   });
-  return renameProject;
+  return useCallback(
+    ({ name }: { name: string }) => renameProject({ id: projectId, name }),
+    [projectId, renameProject],
+  );
 };
