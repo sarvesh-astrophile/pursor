@@ -15,6 +15,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Link } from "@tanstack/react-router";
 import { useProjectsPartial } from "../hooks/use-projects";
 import { useHotkey } from "@tanstack/react-hotkeys";
+import { useNavigate } from "@tanstack/react-router";
 
 const formatTimeStamp = (timestamp: number) => {
   return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
@@ -104,6 +105,7 @@ const ProjectItem = ({ project }: { project: Doc<"projects"> }) => {
 };
 
 const ContinueCard = ({ project }: { project: Doc<"projects"> }) => {
+  const navigate = useNavigate();
   return (
     <div className="flex flex-col gap-2">
       <span className="text-xs text-muted-foreground">Last updated</span>
@@ -111,6 +113,9 @@ const ContinueCard = ({ project }: { project: Doc<"projects"> }) => {
         variant="outline"
         className="h-auto items-start justify-start p-4
         bg-background border flex flex-col gap-2 group"
+        onClick={() =>
+          navigate({ to: `/projects/${project._id}`, params: { projectId: project._id } })
+        }
       >
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2">
