@@ -3,7 +3,7 @@ import { api } from "@pursor/backend/convex/_generated/api";
 import { useConvexAuth, useQuery } from "convex/react";
 import { useEffect, useRef, type ReactNode } from "react";
 
-import { analyticsEnabled, posthog } from "@/lib/posthog";
+import { analyticsEnabled, posthog } from "./posthog";
 
 function IdentitySync() {
   const { isLoading, isAuthenticated } = useConvexAuth();

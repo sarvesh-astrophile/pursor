@@ -13,7 +13,7 @@ vi.mock("convex/react", () => ({ useConvexAuth: () => state.auth, useQuery: () =
 vi.mock("@posthog/react", () => ({
   PostHogProvider: ({ children }: { children: ReactNode }) => children,
 }));
-vi.mock("@/lib/posthog", () => ({ analyticsEnabled: true, posthog: state }));
+vi.mock("./posthog", () => ({ analyticsEnabled: true, posthog: state }));
 
 import { AnalyticsProvider } from "./analytics-provider";
 

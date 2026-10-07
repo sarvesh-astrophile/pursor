@@ -12,11 +12,11 @@
   },
   "iconLibrary": "hugeicons",
   "aliases": {
-    "components": "@/components",
+    "components": "@/app/components",
     "utils": "@pursor/ui/lib/utils",
     "ui": "@pursor/ui/components",
-    "lib": "@/lib",
-    "hooks": "@/hooks"
+    "lib": "@/app/lib",
+    "hooks": "@/app/hooks"
   },
   "menuColor": "default",
   "menuAccent": "subtle",

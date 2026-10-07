@@ -11,7 +11,7 @@ import {
 } from "@pursor/ui/components/dropdown-menu";
 import { useQuery } from "convex/react";
 
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "../client";
 
 export default function UserMenu() {
   const user = useQuery(api.auth.getCurrentUser);

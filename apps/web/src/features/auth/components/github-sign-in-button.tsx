@@ -2,7 +2,7 @@ import { Button } from "@pursor/ui/components/button";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "../client";
 
 export default function GitHubSignInButton({ redirectTo = "/" }: { redirectTo?: string }) {
   const [isPending, setIsPending] = useState(false);

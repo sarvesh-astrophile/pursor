@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
-import { ModeToggle } from "@/components/mode-toggle";
+import { ModeToggle } from "./mode-toggle";
 
 export default function Header() {
   const links = [

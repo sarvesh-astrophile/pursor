@@ -1,7 +1,7 @@
 import { Navigate, Outlet, createFileRoute, redirect, useLocation } from "@tanstack/react-router";
 import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
 
-import AuthLoadingState from "@/features/auth/auth-loading";
+import AuthLoadingState from "@/features/auth/components/auth-loading";
 
 export const Route = createFileRoute("/_auth")({
   beforeLoad: ({ context, location }) => {

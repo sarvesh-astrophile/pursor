@@ -2,7 +2,7 @@ import { beforeEach, expect, test, vi } from "vitest";
 
 const client = vi.hoisted(() => ({ init: vi.fn(), capture: vi.fn(), captureException: vi.fn() }));
 vi.mock("posthog-js", () => ({ default: client }));
-vi.mock("../env.public", () => ({
+vi.mock("@/env.public", () => ({
   ENV: {
     VITE_POSTHOG_PROJECT_TOKEN: "phc_local_test",
     VITE_POSTHOG_HOST: "https://us.i.posthog.com",

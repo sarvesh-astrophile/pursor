@@ -1,6 +1,6 @@
 import posthog from "posthog-js";
 
-import { ENV } from "../env.public";
+import { ENV } from "@/env.public";
 
 const reported = new WeakSet<object>();
 export const analyticsEnabled = !!ENV.VITE_POSTHOG_PROJECT_TOKEN?.trim();

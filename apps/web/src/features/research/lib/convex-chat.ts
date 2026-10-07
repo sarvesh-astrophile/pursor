@@ -4,7 +4,7 @@ import { EventType, type StreamChunk } from "@tanstack/ai/client";
 import type { ConnectConnectionAdapter } from "@tanstack/ai-react";
 import type { ConvexReactClient } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { captureBrowserException, captureResearchEvent } from "./posthog";
+import { captureBrowserException, captureResearchEvent } from "@/app/analytics/posthog";
 
 type Progress = FunctionReturnType<typeof api.chat.progress>;
 

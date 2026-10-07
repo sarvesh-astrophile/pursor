@@ -1,6 +1,6 @@
 import { PostHog } from "posthog-node/edge";
 
-import { ENV } from "../env.public";
+import { ENV } from "@/env.public";
 
 export async function captureServerException(error: unknown, request: Request) {
   if (!ENV.VITE_POSTHOG_PROJECT_TOKEN) return;

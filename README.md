@@ -164,7 +164,7 @@ Markdown only; tool cards and user messages keep their own styling.
 Run the connection adapter's integration checks from `apps/web`:
 
 ```bash
-bun test src/lib/convex-chat.test.js
+bun test src/features/research/lib/convex-chat.test.js
 ```
 
 ## GitHub Authentication
@@ -216,6 +216,42 @@ import { Button } from "@pursor/ui/components/button";
 ### Add app-specific blocks
 
 If you want to add app-specific blocks instead of shared primitives, run the shadcn CLI from `apps/web`.
+
+The web generator defaults to `src/app/components`, `src/app/lib`, and
+`src/app/hooks`. Move feature-specific blocks into their owning feature and
+update their imports. Create library/hook directories when they contain actual code.
+
+## Web Code Organization
+
+`apps/web/src` is organized by ownership:
+
+```text
+src/
+├── app/
+│   ├── components/    # Header, router loader, and theme toggle
+│   ├── providers/     # Theme context and pre-hydration script
+│   └── analytics/     # Browser/server PostHog integration, provider, and tests
+├── features/
+│   ├── auth/          # Auth components, client/server integration, route tests
+│   ├── projects/      # Projects components and data hooks
+│   └── research/      # Chat components, suggestions, streaming adapter/tests
+├── routes/            # Route definitions, guards, loaders, and page composition
+├── router.tsx         # Router and Convex/TanStack Query integration
+├── start.ts           # Server request middleware
+├── env.public.ts      # Browser-safe environment values
+├── env.ts             # Generated environment types
+├── routeTree.gen.ts   # Generated route tree
+└── index.css          # Shared UI stylesheet import
+```
+
+- Put feature-owned components, hooks, and utilities under `features/<feature>`.
+- Put application-wide shell, providers, and services under `app`.
+- Keep generic UI primitives in `packages/ui` and backend functions in `packages/backend`.
+- Keep tests alongside the area they verify. Auth route tests live in
+  `features/auth/auth-routes.vitest.test.ts`, outside route discovery.
+- Use `@/` imports across areas and relative imports within an area. Keep browser
+  and server integrations as separate direct imports.
+- Add subdirectories as needed rather than creating empty folder templates.
 
 ## Environment Configuration
 

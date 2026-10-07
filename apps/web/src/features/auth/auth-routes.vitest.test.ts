@@ -6,14 +6,14 @@ import {
 } from "@tanstack/react-router";
 import { expect, test, vi } from "vitest";
 
-vi.mock("@/components/sign-in-form", () => ({ default: () => null }));
-vi.mock("@/components/sign-up-form", () => ({ default: () => null }));
-vi.mock("@/features/auth/auth-loading", () => ({ default: () => null }));
+vi.mock("@/features/auth/components/sign-in-form", () => ({ default: () => null }));
+vi.mock("@/features/auth/components/sign-up-form", () => ({ default: () => null }));
+vi.mock("@/features/auth/components/auth-loading", () => ({ default: () => null }));
 vi.mock("@/features/projects/components/projects-view", () => ({ ProjectsView: () => null }));
 
-import { Route as IndexRoute } from "../routes/_auth/index";
-import { Route as AuthRoute } from "../routes/_auth/route";
-import { Route as LoginRoute } from "../routes/login";
+import { Route as IndexRoute } from "@/routes/_auth/index";
+import { Route as AuthRoute } from "@/routes/_auth/route";
+import { Route as LoginRoute } from "@/routes/login";
 
 function setupRouter(isAuthenticated: boolean, initialEntry: string) {
   const root = createRootRoute({ beforeLoad: () => ({ isAuthenticated }) });

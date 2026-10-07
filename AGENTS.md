@@ -6,6 +6,15 @@
 - Bun's automatic `.env` loading is disabled (`bunfig.toml`). Web env contracts live in `apps/web/.env.schema`; after changing it, run `bun run env:generate` to refresh `apps/web/src/env.ts`. Browser-safe Convex and PostHog values are read through `src/env.public.ts`; Alchemy loads deployment env from `packages/infra/.env.schema` via Varlock. Run standalone Varlock tools from the owning package directory. Backend secrets belong in the Convex deployment environment; local personal API keys belong in ignored env files.
 - `bun run deploy` / `bun run destroy` target Alchemy's default personal stage; production requires `bunx alchemy deploy --stage production` from `packages/infra`.
 
+## Web code organization
+
+- `apps/web/src/app/` owns application-wide shell components, providers, and services. Theme code lives in `app/providers`; browser/server analytics and identity synchronization live together in `app/analytics`.
+- `apps/web/src/features/<feature>/` owns feature-specific UI and behavior. Auth owns components plus separate `client.ts`/`server.ts` integrations; projects owns components/data hooks; research owns chat components, suggestions, and its streaming adapter.
+- `apps/web/src/routes/` owns route registration, guards, loaders, and page composition. Keep feature tests outside route discovery; route auth tests live in `features/auth/auth-routes.vitest.test.ts`.
+- Use direct `@/` imports across areas and relative imports within an area. Keep client and server integrations separate; avoid barrels that combine them. Features can consume app-wide services and shared UI; avoid importing another feature's internal components/hooks.
+- Generic UI primitives/hooks/utilities belong in `packages/ui`, which must stay independent of web routes, auth clients, and backend API calls. Backend functions stay in `packages/backend`.
+- Colocate tests with the code or area they verify. Create feature subdirectories only when needed. Web shadcn defaults point to `app/components`, `app/lib`, and `app/hooks`; place feature-specific generated blocks in their feature and update imports.
+
 ## Verification
 
 - Run `bun run lint` and `bun run check-types` from the root. The web typecheck builds client/server output before `tsc --noEmit` and may require configured Convex env/generated code. Configured PostHog source-map credentials also make this build upload source maps.
@@ -13,12 +22,12 @@
 - `bun run check` runs `oxlint && oxfmt --write` and edits files despite its name.
 - Test suites use separate runners; there is no root test script. Run the relevant commands from their owning package:
 
-| Package directory  | Command                                | Coverage                                                                                                                                             |
-| ------------------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`         | `bun run test`                         | Vitest/jsdom route auth guards and redirects, browser analytics, auth identity synchronization, and source-map hook tests (`*.vitest.test.{ts,tsx}`) |
-| `apps/web`         | `bun test src/lib/convex-chat.test.js` | Real TanStack stream processing, incremental text/tools, retries, stale workflows, follow-ups, errors, and subscription cleanup                      |
-| `packages/backend` | `bun run test`                         | Vitest/edge-runtime Convex function tests (`convex/**/*.test.ts`) using `convex-test`                                                                |
-| `packages/backend` | `bun test tests/ai-telemetry.test.js`  | Node OTel model/tool spans, retry correlation, transcript opt-out, exporter failures, and OTLP delivery                                              |
+| Package directory  | Command                                                  | Coverage                                                                                                                                             |
+| ------------------ | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`         | `bun run test`                                           | Vitest/jsdom route auth guards and redirects, browser analytics, auth identity synchronization, and source-map hook tests (`*.vitest.test.{ts,tsx}`) |
+| `apps/web`         | `bun test src/features/research/lib/convex-chat.test.js` | Real TanStack stream processing, incremental text/tools, retries, stale workflows, follow-ups, errors, and subscription cleanup                      |
+| `packages/backend` | `bun run test`                                           | Vitest/edge-runtime Convex function tests (`convex/**/*.test.ts`) using `convex-test`                                                                |
+| `packages/backend` | `bun test tests/ai-telemetry.test.js`                    | Node OTel model/tool spans, retry correlation, transcript opt-out, exporter failures, and OTLP delivery                                              |
 
 ## Protected web routes
 
@@ -26,7 +35,7 @@
 - `/` is the Projects home page, defined in `_auth/index.tsx` and rendered by `src/features/projects/components/projects-view.tsx`. The former public starter `routes/index.tsx` and `/projects` route have been removed. Put future application routes inside `_auth/` so they inherit protection.
 - `/login` and `/api/auth/*` remain public to support sign-in and authentication callbacks. `routes/login.tsx` hosts the sign-in/sign-up forms, validates the `redirect` search parameter as a same-origin path, rejects redirects back to `/login`, and defaults to `/`. Authenticated visitors are redirected to their requested destination.
 - Email sign-in/sign-up invalidate the router's auth context before navigating to the destination. GitHub sign-in uses the same destination as its callback URL and returns failures to `/login`. Preserve query parameters and hash fragments when returning users to the page they originally requested.
-- Route protection tests live in `src/lib/auth-routes.vitest.test.ts`; they cover the protected home page and dashboard, blocked child loaders, return destinations, and unsafe or looping redirects. Backend functions must continue enforcing authentication and ownership independently of frontend route guards.
+- Route protection tests live in `src/features/auth/auth-routes.vitest.test.ts`; they cover the protected home page and dashboard, blocked child loaders, return destinations, and unsafe or looping redirects. Backend functions must continue enforcing authentication and ownership independently of frontend route guards.
 
 ## Durable AI agent
 
@@ -43,7 +52,7 @@
 
 ## Research chat and streaming
 
-- `/dashboard` hosts `apps/web/src/components/research-chat.tsx`, using TanStack AI `useChat` and `src/lib/convex-chat.ts`. The custom connection translates Convex query subscriptions into incremental AG-UI text, tool-argument, and tool-result events; it does not use simulated responses. Use the browser-safe `@tanstack/ai/client` entrypoint for protocol types and `EventType`.
+- `/dashboard` hosts `apps/web/src/features/research/components/research-chat.tsx`. `chat-conversation.tsx` uses TanStack AI `useChat` and `src/features/research/lib/convex-chat.ts`; `chat-message.tsx` renders Markdown and `tool-call-card.tsx` renders tool states/details. Starter/composer prompts live in `features/research/suggestions.ts`. The custom connection translates Convex query subscriptions into incremental AG-UI text, tool-argument, and tool-result events; it does not use simulated responses. Use the browser-safe `@tanstack/ai/client` entrypoint for protocol types and `EventType`.
 - `researchGeneration.generateReply` is a Node action using `agent.streamText` with `saveStreamDeltas: { chunking: "word", throttleMs: 100 }`. `chat.reply` calls `internal.contextAgent.generateReply`, which delegates across runtimes to the Node action; preserve that wrapper and its optional `turnId` for CLI and persisted-workflow compatibility. It waits for the stream to finish inside the Workflow action. `chat.progress` reads the latest current-turn stream with `listStreams`/`syncStreams`, and `convex/lib/chatStream.ts` converts its native chunks into a cumulative text/tool snapshot. The adapter emits only new suffixes, ignores old-workflow snapshots, and tracks stream changes on retries. Keep stream queries behind the same ownership checks as messages.
 - The dashboard uses shared Card/InputGroup components and `MessageScrollerProvider` with `autoScroll`, the latest user message as an anchor, and a jump-to-end button. Do not restore unconditional `scrollIntoView` on every delta: it overrides readers who scroll up. Tool headers stay visible while JSON payloads are expandable; tools stay outside Typeset.
 - `packages/backend/convex/chat.ts` exposes authenticated `send` and `progress` endpoints. `send` validates trimmed prompts of 1–8,000 characters and returns `{ sessionId, workflowId, turnId, threadId }`. `chatSessions` stores Better Auth user ownership, the Agent thread, and the active workflow/prompt order. Check ownership before reading messages or writing prompts; reject overlapping runs per session. Follow-ups reuse the Agent thread. The playground transcript is in memory and resets on page reload; backend messages remain persisted.
@@ -53,11 +62,11 @@
 
 - Configuration and activation are documented in `docs/posthog.md`. Web project token/host/release are public `VITE_*` values in the Varlock contract; source-map and dashboard API keys are server/build-only. Alchemy imports and forwards the public values.
 - `@posthog/convex` is mounted in `convex.config.ts`. `POSTHOG_PROJECT_TOKEN` must exist because the component requires it; an empty string disables application telemetry. Event/exception helpers in `convex/posthog.ts` catch delivery-scheduling failures.
-- Browser analytics live in `src/lib/posthog.ts` and `src/components/analytics-provider.tsx`. Use the Better Auth user `_id` consistently for browser/backend/AI `distinct_id`; internal CLI demos use `pursor:internal-demo`. `AnalyticsProvider` synchronizes identity after auth resolves and resets on confirmed logout/account changes, including persisted browser identity. Use one history-based pageview strategy; browser autocapture and session recording are disabled. First-text latency is measured when the adapter delivers its first text delta.
+- Browser analytics live in `src/app/analytics/posthog.ts` and `src/app/analytics/analytics-provider.tsx`. Use the Better Auth user `_id` consistently for browser/backend/AI `distinct_id`; internal CLI demos use `pursor:internal-demo`. `AnalyticsProvider` synchronizes identity after auth resolves and resets on confirmed logout/account changes, including persisted browser identity. Use one history-based pageview strategy; browser autocapture and session recording are disabled. First-text latency is measured when the adapter delivers its first text delta.
 - `researchTurns` persists ownership, correlation IDs, attempt count, and status. `chat.complete` is an idempotent Workflow completion callback; never capture lifecycle events in the reactive `chat.progress` query. `researchTelemetry.beginAttempt` validates prompt/thread before incrementing attempts.
 - The installed AI SDK 7 needs `@ai-sdk/otel`, per-call `telemetry.integrations`, and custom `enrichSpan` attributes. Old `experimental_telemetry.metadata` examples are incompatible. Node-only async context/exporter code lives in `lib/aiTelemetry.ts` and Node actions in `researchGeneration.ts`. All retries share a persisted turn trace/parent; each attempt has its own span. Finalization exports the root with its persisted IDs/timing.
 - Prompt/result recording is opt-in via `POSTHOG_AI_RECORD_CONTENT=true`. Flush after streaming completes and catch exporter failures so they never trigger another paid generation. Model pricing must be verified for OpenCode/DeepSeek; dashboard queries expose pricing coverage.
-- `src/start.ts` captures thrown server request errors and returned 5xx responses through `src/lib/posthog.server.ts`, using `posthog-node/edge` and system identity `pursor:web-server`. Browser exceptions include router boundaries and handled chat failures; repeated captures of the same Error object are deduplicated. Native Convex exception reporting is an optional Pro integration and can duplicate explicit reports.
+- `src/start.ts` captures thrown server request errors and returned 5xx responses through `src/app/analytics/posthog.server.ts`, using `posthog-node/edge` and system identity `pursor:web-server`. Browser exceptions include router boundaries and handled chat failures; repeated captures of the same Error object are deduplicated. Native Convex exception reporting is an optional Pro integration and can duplicate explicit reports.
 - The Vite+ source-map hook in `apps/web/vite.config.ts` calls `scripts/posthog-source-maps.ts` when `POSTHOG_CLI_API_KEY` and `POSTHOG_CLI_PROJECT_ID` are set. It generates client/server maps, injects release metadata before upload, and deletes maps after upload; upload failure fails the build. The release is `pursor-web@${VITE_APP_RELEASE}` (default `development`). Keep frontend `VITE_APP_RELEASE` and backend `POSTHOG_RELEASE` aligned for deployment correlation.
 - From `apps/web`, `bun run analytics:setup` uses `POSTHOG_ADMIN_API_KEY`, `POSTHOG_CLI_PROJECT_ID`, and `POSTHOG_CLI_HOST` to provision four dashboards (Usage, Performance, Reliability, AI Cost) and 14 HogQL insights defined in `scripts/posthog-dashboards.ts`; `bun run analytics:setup --dry-run` prints definitions. Reruns reuse named dashboards and skip existing named insights rather than updating their queries. Cost insights exclude Context.dev credits.
 
@@ -108,6 +117,7 @@ pursor/
 │       ├── vite.config.ts             # TanStack Start, React, Tailwind, port 3001, PostHog source-map hook
 │       ├── vitest.config.ts           # jsdom analytics + source-map tests; separate from Bun adapter tests
 │       ├── public/
+│       │   ├── logo.svg
 │       │   └── robots.txt
 │       ├── scripts/
 │       │   ├── posthog-dashboards.ts   # Four dashboard definitions and 14 HogQL insights
@@ -121,38 +131,54 @@ pursor/
 │           ├── router.tsx             # Convex/TanStack Query + SSR router integration
 │           ├── routeTree.gen.ts       # GENERATED by TanStack Router; do not edit
 │           ├── start.ts               # Global Start request middleware for server error capture
-│           ├── components/
-│           │   ├── analytics-provider.tsx # Browser PostHog provider + authenticated identity sync
-│           │   ├── analytics-provider.vitest.test.tsx # Login/logout/account-switch identity tests
-│           │   ├── github-sign-in-button.tsx # Shared GitHub OAuth sign-in button
-│           │   ├── header.tsx         # App navigation and theme toggle
-│           │   ├── loader.tsx         # Router pending state
-│           │   ├── mode-toggle.tsx    # Light/dark/system theme menu
-│           │   ├── research-chat.tsx  # Live research chat, tool cards, Typeset Markdown, scroll, analytics
-│           │   ├── sign-in-form.tsx   # Email/password and GitHub sign-in
-│           │   ├── sign-up-form.tsx   # Email/password sign-up and GitHub sign-in
-│           │   ├── theme-provider.tsx # Persisted theme context and pre-hydration script
-│           │   └── user-menu.tsx
+│           ├── app/
+│           │   ├── components/
+│           │   │   ├── header.tsx     # App navigation and theme toggle
+│           │   │   ├── loader.tsx     # Router pending state
+│           │   │   └── mode-toggle.tsx # Light/dark/system theme menu
+│           │   ├── providers/
+│           │   │   └── theme-provider.tsx # Persisted theme context and pre-hydration script
+│           │   └── analytics/
+│           │       ├── analytics-provider.tsx # Browser provider + authenticated identity sync
+│           │       ├── analytics-provider.vitest.test.tsx # Login/logout/account-switch tests
+│           │       ├── posthog.ts     # Browser initialization, events, exception deduplication
+│           │       ├── posthog.server.ts # Edge-safe server exception delivery
+│           │       └── posthog.vitest.test.ts # Browser initialization and exception tests
 │           ├── features/
 │           │   ├── auth/
-│           │   │   └── auth-loading.tsx # Styled session-check loading state
-│           │   └── projects/           # Projects home-page components
-│           ├── lib/
-│           │   ├── auth-client.ts     # Better Auth React client with Convex plugin
-│           │   ├── auth-routes.vitest.test.ts # Protected index/dashboard loaders and login redirect tests
-│           │   ├── auth-server.ts     # React Start auth handler/token helpers
-│           │   ├── convex-chat.ts     # Convex subscription → incremental AG-UI connection + latency metric
-│           │   ├── convex-chat.test.js # Bun tests using the real TanStack stream processor
-│           │   ├── posthog.ts         # Browser analytics initialization, events, and exception deduplication
-│           │   ├── posthog.server.ts  # Edge-safe server exception delivery
-│           │   └── posthog.vitest.test.ts # Browser initialization and exception tests
+│           │   │   ├── components/
+│           │   │   │   ├── auth-loading.tsx # Styled session-check loading state
+│           │   │   │   ├── github-sign-in-button.tsx # GitHub OAuth sign-in
+│           │   │   │   ├── sign-in-form.tsx # Email/password and GitHub sign-in
+│           │   │   │   ├── sign-up-form.tsx # Email/password sign-up and GitHub sign-in
+│           │   │   │   └── user-menu.tsx
+│           │   │   ├── client.ts      # Better Auth React client with Convex plugin
+│           │   │   ├── server.ts      # React Start auth handler/token helpers
+│           │   │   └── auth-routes.vitest.test.ts # Protected loaders and login redirects
+│           │   ├── projects/
+│           │   │   ├── components/
+│           │   │   │   ├── project-command-dialog.tsx
+│           │   │   │   ├── projects-list.tsx
+│           │   │   │   └── projects-view.tsx
+│           │   │   └── hooks/use-projects.ts
+│           │   └── research/
+│           │       ├── components/
+│           │       │   ├── research-chat.tsx # Conversation reset/lifecycle
+│           │       │   ├── chat-conversation.tsx # Chat state, composer, scroll, analytics
+│           │       │   ├── chat-message.tsx # User/assistant messages and Typeset Markdown
+│           │       │   └── tool-call-card.tsx # Tool status and expandable input/output
+│           │       ├── lib/
+│           │       │   ├── convex-chat.ts # Convex → incremental AG-UI connection + latency
+│           │       │   └── convex-chat.test.js # Real TanStack stream processor tests
+│           │       └── suggestions.ts # Starter/composer prompts
 │           └── routes/
 │               ├── __root.tsx         # SSR auth, theme/analytics providers, error boundary, document shell
 │               ├── login.tsx          # Public sign-in/up page with validated return destination
 │               ├── _auth/
 │               │   ├── route.tsx      # Shared beforeLoad auth guard, live auth gating, session loading
 │               │   ├── index.tsx      # Protected Projects home page at /
-│               │   └── dashboard.tsx  # Authenticated Context.dev chat playground
+│               │   ├── dashboard.tsx  # Authenticated Context.dev chat playground
+│               │   └── projects.$projectId.tsx # Protected project detail placeholder
 │               └── api/auth/
 │                   └── $.ts           # GET/POST Better Auth route
 └── packages/

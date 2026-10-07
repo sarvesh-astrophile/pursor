@@ -6,8 +6,8 @@ import { useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import z from "zod";
 
-import GitHubSignInButton from "@/components/github-sign-in-button";
-import { authClient } from "@/lib/auth-client";
+import GitHubSignInButton from "./github-sign-in-button";
+import { authClient } from "../client";
 
 export default function SignUpForm({
   onSwitchToSignIn,

@@ -15,13 +15,13 @@ import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { createServerFn } from "@tanstack/react-start";
 import { useEffect } from "react";
 
-import { ThemeProvider, useTheme } from "@/components/theme-provider";
-import { authClient } from "@/lib/auth-client";
-import { getToken } from "@/lib/auth-server";
-import { AnalyticsProvider } from "@/components/analytics-provider";
-import { captureBrowserException } from "@/lib/posthog";
+import { ThemeProvider, useTheme } from "@/app/providers/theme-provider";
+import { authClient } from "@/features/auth/client";
+import { getToken } from "@/features/auth/server";
+import { AnalyticsProvider } from "@/app/analytics/analytics-provider";
+import { captureBrowserException } from "@/app/analytics/posthog";
 
-import Header from "../components/header";
+import Header from "@/app/components/header";
 
 import appCss from "../index.css?url";
 

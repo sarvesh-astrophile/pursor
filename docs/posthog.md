@@ -281,6 +281,11 @@ existing named tiles, preserving edits in PostHog.
 
 ## Verification
 
+Web analytics code lives in `apps/web/src/app/analytics/`: `posthog.ts` handles
+browser initialization/events, `analytics-provider.tsx` synchronizes identity,
+and `posthog.server.ts` reports server request errors from `src/start.ts`.
+Research UI and its streaming adapter live in `apps/web/src/features/research/`.
+
 From the root:
 
 ```sh
@@ -292,7 +297,7 @@ From `apps/web`:
 
 ```sh
 bun run test
-bun test src/lib/convex-chat.test.js
+bun test src/features/research/lib/convex-chat.test.js
 ```
 
 From `packages/backend`:

@@ -1,6 +1,6 @@
 import { createMiddleware, createStart } from "@tanstack/react-start";
 
-import { captureServerException } from "./lib/posthog.server";
+import { captureServerException } from "@/app/analytics/posthog.server";
 
 const errorTracking = createMiddleware().server(async ({ next, request }) => {
   try {
