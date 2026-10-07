@@ -14,6 +14,7 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "@tanstack/react-router";
 import { useProjectsPartial } from "../hooks/use-projects";
+import { useHotkey } from "@tanstack/react-hotkeys";
 
 const formatTimeStamp = (timestamp: number) => {
   return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
@@ -26,6 +27,12 @@ interface ProjectsListProps {
 export const ProjectsList = ({ onViewAll }: ProjectsListProps) => {
   const projects = useProjectsPartial(6);
   const [mostRecent, ...rest] = projects ?? [];
+  useHotkey("Mod+K", onViewAll, {
+    preventDefault: true,
+    ignoreInputs: false,
+    requireReset: true,
+  });
+
   if (projects === undefined) return <Spinner className="size-4" />;
 
   return (
@@ -35,9 +42,14 @@ export const ProjectsList = ({ onViewAll }: ProjectsListProps) => {
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-xs text-muted-foreground">Recent Projects </h2>
-            <Button className="text-xs text-muted-foreground" variant="ghost" onClick={onViewAll}>
+            <Button
+              className="text-xs text-muted-foreground"
+              variant="ghost"
+              onClick={onViewAll}
+              aria-keyshortcuts="Meta+K Control+K"
+            >
               <span>View All</span>
-              <Kbd className="px-2">Cmd + K</Kbd>
+              <Kbd className="px-2">Cmd/Ctrl + K</Kbd>
             </Button>
           </div>
           <ul className="flex flex-col">
@@ -71,7 +83,8 @@ const ProjectItem = ({ project }: { project: Doc<"projects"> }) => {
         buttonVariants({ variant: "ghost", size: "sm" }),
         "text-sm text-foreground/50 font-normal hover:text-foreground py-1 flex items-center gap-2 justify-between w-full group",
       )}
-      to="."
+      to="/projects/$projectId"
+      params={{ projectId: project._id }}
     >
       <div className="flex items-center gap-2">
         <HugeiconsIcon

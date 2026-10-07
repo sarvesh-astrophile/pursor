@@ -33,6 +33,7 @@ export const get = query({
     return await ctx.db
       .query("projects")
       .withIndex("by_ownerId", (q) => q.eq("ownerId", user._id))
+      .order("desc")
       .take(100);
   },
 });
@@ -50,6 +51,7 @@ export const getPartial = query({
     return await ctx.db
       .query("projects")
       .withIndex("by_ownerId", (q) => q.eq("ownerId", user._id))
+      .order("desc")
       .take(limit);
   },
 });

@@ -5,9 +5,29 @@ import { GithubIcon, SparkleIcon } from "@hugeicons/core-free-icons";
 import { ProjectsList } from "./projects-list";
 import { adjectives, animals, colors, uniqueNamesGenerator } from "unique-names-generator";
 import { useCreateProject } from "../hooks/use-projects";
+import { useState } from "react";
+import { ProjectCommandDialog } from "./project-command-dialog";
+import { useHotkey } from "@tanstack/react-hotkeys";
 
 export const ProjectsView = () => {
   const createProject = useCreateProject();
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+  const handleCreateProject = () => {
+    const projectName = uniqueNamesGenerator({
+      dictionaries: [adjectives, animals, colors],
+      separator: "-",
+      length: 3,
+    });
+    void createProject({ name: projectName });
+  };
+
+  useHotkey("Mod+J", handleCreateProject, {
+    enabled: !projectDialogOpen,
+    preventDefault: true,
+    ignoreInputs: true,
+    requireReset: true,
+  });
+
   return (
     <div className="min-h bg-sidebar flex flex-col items-center p-6 md:p-16">
       <div className="w-full max-w-sm mx-auto flex flex-col gap-4 items-center">
@@ -21,19 +41,13 @@ export const ProjectsView = () => {
           <div className="grid grid-cols-2 gap-2 ">
             <Button
               variant="outline"
-              onClick={() => {
-                const projectName = uniqueNamesGenerator({
-                  dictionaries: [adjectives, animals, colors],
-                  separator: "-",
-                  length: 3,
-                });
-                createProject({ name: projectName });
-              }}
+              onClick={handleCreateProject}
+              aria-keyshortcuts="Meta+J Control+J"
               className="h-full items-start p-4 bg-background border flex flex-col gap-6"
             >
               <div className="flex items-center w-full justify-between">
                 <HugeiconsIcon icon={SparkleIcon} className="size-4" />
-                <Kbd className="px-2">Cmd + J</Kbd>
+                <Kbd className="px-2">Cmd/Ctrl + J</Kbd>
               </div>
               <div>New</div>
             </Button>
@@ -48,9 +62,10 @@ export const ProjectsView = () => {
               <div>Import</div>
             </Button>
           </div>
-          <ProjectsList onViewAll={() => {}} />
+          <ProjectsList onViewAll={() => setProjectDialogOpen(true)} />
         </div>
       </div>
+      <ProjectCommandDialog open={projectDialogOpen} onOpenChange={setProjectDialogOpen} />
     </div>
   );
 };
