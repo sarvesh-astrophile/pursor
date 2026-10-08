@@ -12,7 +12,6 @@ const MAX_SIDEBAR_WIDTH = 800;
 const DEFAULT_CONVERSATION_SIDEBAR_WIDTH = 400;
 const DEFAULT_MAIN_SIZE = 1000;
 
-
 function ProjectsLayout() {
   const { projectId } = useParams({ strict: false });
   return (
