@@ -1,4 +1,4 @@
-import { Edit03Icon, GithubIcon } from "@hugeicons/core-free-icons";
+import { GithubIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Id } from "@pursor/backend/convex/_generated/dataModel";
 import { cn } from "@pursor/ui/lib/utils";
