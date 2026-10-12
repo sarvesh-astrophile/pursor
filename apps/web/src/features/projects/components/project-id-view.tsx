@@ -2,7 +2,14 @@ import { GithubIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Id } from "@pursor/backend/convex/_generated/dataModel";
 import { cn } from "@pursor/ui/lib/utils";
+import { Allotment } from "allotment";
 import { useState } from "react";
+import { FileExplorer } from "./file-explorer";
+
+const MIN_SIDEBAR_WIDTH = 200;
+const MAX_SIDEBAR_WIDTH = 800;
+const DEFAULT_SIDEBAR_WIDTH = 350;
+const DEFAULT_MAIN_SIZE = 1000;
 
 const Tab = ({
   label,
@@ -14,7 +21,8 @@ const Tab = ({
   onClick: () => void;
 }) => {
   return (
-    <div
+    <button
+      type="button"
       className={cn(
         "flex items-center gap-2 h-full px-3 cursor-pointer text-muted-foreground border-r hover:bg-accent/30",
         isActive && "bg-background text-foreground",
@@ -22,7 +30,7 @@ const Tab = ({
       onClick={onClick}
     >
       <span className="text-sm">{label}</span>
-    </div>
+    </button>
   );
 };
 
@@ -51,12 +59,22 @@ export const ProjectIdView = ({ projectId }: { projectId: Id<"projects"> }) => {
           </div>
         </div>
       </nav>
-      <div className="flex-1 relative">
+      <div className="flex-1 min-h-0 relative">
         <div className={cn("absolute inset-0", activeView === "editor" ? "visible" : "invisible")}>
-          editor
+          <Allotment defaultSizes={[DEFAULT_SIDEBAR_WIDTH, DEFAULT_MAIN_SIZE]}>
+            <Allotment.Pane
+              snap
+              minSize={MIN_SIDEBAR_WIDTH}
+              maxSize={MAX_SIDEBAR_WIDTH}
+              preferredSize={DEFAULT_SIDEBAR_WIDTH}
+            >
+              <FileExplorer projectId={projectId} />
+            </Allotment.Pane>
+            <Allotment.Pane>
+              <p>Editor</p>
+            </Allotment.Pane>
+          </Allotment>
         </div>
-      </div>
-      <div className="flex-1 relative">
         <div className={cn("absolute inset-0", activeView === "preview" ? "visible" : "invisible")}>
           preview
         </div>
