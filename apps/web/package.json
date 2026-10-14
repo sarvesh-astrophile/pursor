@@ -20,6 +20,7 @@
     "@posthog/react": "^1.11.3",
     "@pursor/backend": "workspace:*",
     "@pursor/ui": "workspace:*",
+    "@react-symbols/icons": "^1.4.1",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/ai": "^0.64.0",
     "@tanstack/ai-react": "^0.29.4",
