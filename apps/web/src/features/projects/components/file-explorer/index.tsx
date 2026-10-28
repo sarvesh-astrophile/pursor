@@ -8,14 +8,27 @@ import {
   FolderPlusIcon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@pursor/ui/lib/utils";
-import { Id } from "@pursor/backend/convex/_generated/dataModel";
+import type { Doc, Id } from "@pursor/backend/convex/_generated/dataModel";
 import { useProjectById } from "../../hooks/use-projects";
 import { Button } from "@pursor/ui/components/button";
 import { useCreateFile, useCreateFolder, useFolderContents } from "../../hooks/use-files";
 import { CreateInput } from "./create-input";
 import { LoadingRow } from "./loading-row";
+import { Tree } from "./tree";
 
-export const FileExplorer = ({ projectId }: { projectId: Id<"projects"> }) => {
+export const FileExplorer = ({
+  projectId,
+  activeFileId,
+  onOpenFile,
+  onDeleteItem,
+  onRenameItem,
+}: {
+  projectId: Id<"projects">;
+  activeFileId?: Id<"files">;
+  onOpenFile?: (file: Doc<"files">, ancestorIds: Id<"files">[]) => void;
+  onDeleteItem?: (id: Id<"files">) => void;
+  onRenameItem?: (id: Id<"files">, name: string) => void;
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [collapseKey, setCollapseKey] = useState(0);
   const project = useProjectById(projectId);
@@ -23,23 +36,23 @@ export const FileExplorer = ({ projectId }: { projectId: Id<"projects"> }) => {
   const [creating, setCreating] = useState<"file" | "folder" | null>(null);
   const createFile = useCreateFile();
   const createFolder = useCreateFolder();
-  const handleCreate = (name: string) => {
-    setCreating(null);
-
+  const handleCreate = async (name: string) => {
+    if (!creating) return;
     if (creating === "file") {
-      createFile({
+      await createFile({
         projectId,
         name,
         content: "",
         parentId: undefined,
       });
     } else if (creating === "folder") {
-      createFolder({
+      await createFolder({
         projectId,
         name,
         parentId: undefined,
       });
     }
+    setCreating(null);
   };
   return (
     <div className="h-full min-h-0 overflow-hidden bg-sidebar">
@@ -101,13 +114,25 @@ export const FileExplorer = ({ projectId }: { projectId: Id<"projects"> }) => {
             {rootFiles === undefined && <LoadingRow level={0} />}
             {creating && (
               <CreateInput
+                key={creating}
                 type={creating}
                 level={0}
                 onCancel={() => setCreating(null)}
                 onSubmit={handleCreate}
               />
-                      )}
-                      {rootFiles && ()}
+            )}
+            {rootFiles?.map((item) => (
+              <Tree
+                key={`${item._id}-${collapseKey}`}
+                item={item}
+                level={0}
+                projectId={projectId}
+                activeFileId={activeFileId}
+                onOpenFile={onOpenFile}
+                onDeleteItem={onDeleteItem}
+                onRenameItem={onRenameItem}
+              />
+            ))}
           </>
         )}
       </ScrollArea>

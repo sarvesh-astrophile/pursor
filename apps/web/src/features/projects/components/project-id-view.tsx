@@ -1,6 +1,6 @@
 import { GithubIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import type { Id } from "@pursor/backend/convex/_generated/dataModel";
+import type { Doc, Id } from "@pursor/backend/convex/_generated/dataModel";
 import { cn } from "@pursor/ui/lib/utils";
 import { Allotment } from "allotment";
 import { useState } from "react";
@@ -36,6 +36,11 @@ const Tab = ({
 
 export const ProjectIdView = ({ projectId }: { projectId: Id<"projects"> }) => {
   const [activeView, setActiveView] = useState<"editor" | "preview">("editor");
+  const [selection, setSelection] = useState<{
+    file: Doc<"files">;
+    ancestorIds: Id<"files">[];
+  } | null>(null);
+  const selected = selection?.file.projectId === projectId ? selection : null;
   return (
     <div className="h-full flex flex-col">
       <nav className="h-8.75 flex items-center bg-sidebar border-b">
@@ -68,10 +73,49 @@ export const ProjectIdView = ({ projectId }: { projectId: Id<"projects"> }) => {
               maxSize={MAX_SIDEBAR_WIDTH}
               preferredSize={DEFAULT_SIDEBAR_WIDTH}
             >
-              <FileExplorer projectId={projectId} />
+              <FileExplorer
+                key={projectId}
+                projectId={projectId}
+                activeFileId={selected?.file._id}
+                onOpenFile={(file, ancestorIds) => setSelection({ file, ancestorIds })}
+                onDeleteItem={(id) => {
+                  setSelection((current) =>
+                    current && (current.file._id === id || current.ancestorIds.includes(id))
+                      ? null
+                      : current,
+                  );
+                }}
+                onRenameItem={(id, name) => {
+                  setSelection((current) =>
+                    current?.file._id === id
+                      ? { ...current, file: { ...current.file, name } }
+                      : current,
+                  );
+                }}
+              />
             </Allotment.Pane>
             <Allotment.Pane>
-              <p>Editor</p>
+              {selected ? (
+                <div className="flex h-full min-h-0 flex-col">
+                  <div className="flex items-center justify-between border-b px-3 py-1 text-sm">
+                    <span className="truncate">{selected.file.name}</span>
+                    <button
+                      type="button"
+                      aria-label={`Close ${selected.file.name}`}
+                      onClick={() => setSelection(null)}
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <pre className="min-h-0 flex-1 overflow-auto p-3 text-sm">
+                    {selected.file.content ?? "No text content available."}
+                  </pre>
+                </div>
+              ) : (
+                <p className="p-3 text-sm text-muted-foreground">
+                  Select a file to view its contents.
+                </p>
+              )}
             </Allotment.Pane>
           </Allotment>
         </div>
