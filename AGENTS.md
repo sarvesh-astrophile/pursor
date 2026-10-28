@@ -11,7 +11,7 @@
 ## Web code organization
 
 - `apps/web/src/app/` owns application-wide shell components, providers, and services. Theme code lives in `app/providers`; browser/server analytics and identity synchronization live together in `app/analytics`.
-- `apps/web/src/features/<feature>/` owns feature-specific UI and behavior. Auth owns components plus separate `client.ts`/`server.ts` integrations; projects owns components/data hooks; research owns chat components, suggestions, and its streaming adapter.
+- `apps/web/src/features/<feature>/` owns feature-specific UI and behavior. Auth owns components plus separate `client.ts`/`server.ts` integrations; projects owns home/workspace components, the file explorer, and project/file data hooks; research owns chat components, suggestions, and its streaming adapter.
 - `apps/web/src/routes/` owns route registration, guards, loaders, and page composition. Keep feature tests outside route discovery; route auth tests live in `features/auth/auth-routes.vitest.test.ts`.
 - Use direct `@/` imports across areas and relative imports within an area. Keep client and server integrations separate; avoid barrels that combine them. Features can consume app-wide services and shared UI; avoid importing another feature's internal components/hooks.
 - Generic UI primitives/hooks/utilities belong in `packages/ui`, which must stay independent of web routes, auth clients, and backend API calls. Backend functions stay in `packages/backend`.
@@ -26,7 +26,7 @@
 
 | Package directory  | Command                                                  | Coverage                                                                                                                                             |
 | ------------------ | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`         | `bun run test`                                           | Vitest/jsdom route auth guards and redirects, project query auth gating, browser analytics, auth identity synchronization, and source-map hook tests (`*.vitest.test.{ts,tsx}`) |
+| `apps/web`         | `bun run test`                                           | Vitest/jsdom route auth, project auth gating/optimistic renaming, file explorer inputs/tree actions/optimistic updates, workspace selection, browser analytics, auth identity synchronization, and source-map hooks (`*.vitest.test.{ts,tsx}`) |
 | `apps/web`         | `bun test src/features/research/lib/convex-chat.test.js` | Real TanStack stream processing, incremental text/tools, retries, stale workflows, follow-ups, errors, and subscription cleanup                      |
 | `packages/backend` | `bun run test`                                           | Vitest/edge-runtime Convex function tests (`convex/**/*.test.ts`) using `convex-test`                                                                |
 | `packages/backend` | `bun test tests/ai-telemetry.test.js`                    | Node OTel model/tool spans, retry correlation, transcript opt-out, exporter failures, and OTLP delivery                                              |
@@ -44,13 +44,27 @@
 ## Projects home and navigation
 
 - `features/projects/components/projects-view.tsx` composes project creation, the recent-project list, and the search dialog. New projects receive a hyphen-separated adjective/animal/color name from `unique-names-generator` and are created through `useCreateProject`; creation currently updates the list without navigating.
-- `features/projects/hooks/use-projects.ts` owns `useProjects`, `useProjectsPartial(limit)`, and `useCreateProject`. The create hook performs optimistic updates only when the current user is available, adds a temporary `Doc<"projects">` with a UUID cast to `Id<"projects">`, and updates cached full/partial lists with their existing bounds (100 or the query's limit).
-- `packages/backend/convex/projects.ts` exposes authenticated `create`, `get`, and `getPartial`. Ownership comes from `authComponent.getAuthUser(ctx)`, never client arguments. Creation trims names and rejects empty names; `get` returns at most 100 projects and `getPartial` requires a positive safe-integer limit. Both query `by_ownerId` in descending order, which orders by creation time, not `updatedAt`.
+- `features/projects/hooks/use-projects.ts` owns `useProjects`, `useProjectsPartial(limit)`, `useProjectById(id)`, `useCreateProject`, and `useRenameProject(projectId)`. Queries skip until authenticated. The create hook performs optimistic updates only when the current user is available, adds a temporary `Doc<"projects">` with a UUID cast to `Id<"projects">`, and updates cached full/partial lists with their existing bounds (100 or the query's limit). Rename updates the owned project's cached detail and all loaded full/partial lists without reordering them; skip optimistic changes without authentication/current-user data.
+- `packages/backend/convex/projects.ts` exposes authenticated `create`, `get`, `getPartial`, `getById`, and `rename`. Ownership comes from `authComponent.getAuthUser(ctx)`, never client arguments. Creation trims names and rejects empty names; `get` returns at most 100 projects and `getPartial` requires a positive safe-integer limit. Both lists query `by_ownerId` in descending order, which orders by creation time, not `updatedAt`. Detail/rename reject missing or foreign projects with the same "Project not found." error. Rename writes the supplied name and refreshes `updatedAt`; trimming/empty-name rejection currently happen in the navbar, not this mutation.
 - The `projects` table requires `name`, Better Auth `ownerId`, and numeric `updatedAt`; optional import/export status fields and `exportRepoURL` also live there. Preserve the `by_ownerId` index and required timestamp on writes.
-- `projects-list.tsx` requests six projects, puts the first in the Continue card, and displays the remainder as recent links. The Continue card, recent links, and search selections navigate to `/projects/$projectId`. `_auth/projects.$projectId.tsx` is a protected placeholder with no project loader or detail functionality yet.
+- `projects-list.tsx` requests six projects, puts the first in the Continue card, and displays the remainder as recent links. The Continue card, recent links, and search selections navigate to `/projects/$projectId`, now implemented by `_auth/projects/$projectId.tsx` inside the shared projects layout. The route casts its parameter to `Id<"projects">`; data is fetched through component hooks, not a route loader.
 - `project-command-dialog.tsx` searches the full bounded project list locally by project name using shared Command components, distinguishes loading from empty results, and closes on selection. Project icons reflect import state: GitHub for completed, a spinner for importing, an alert for failed, and a globe otherwise. Relative timestamps use `date-fns` and `updatedAt`.
 - Keyboard shortcuts use `@tanstack/react-hotkeys`: `Mod+J` creates a project (disabled while search is open and ignored in inputs), and `Mod+K` opens search (including from inputs). Preserve `preventDefault`, `requireReset`, and matching `aria-keyshortcuts`. The GitHub Import card and its displayed `Cmd + I` hint are placeholders with no import handler or registered shortcut.
-- `features/projects/hooks/use-projects.vitest.test.ts` covers query skipping during auth loading, unauthenticated state, and logout, plus authenticated query arguments and changing recent-project limits.
+- `features/projects/hooks/use-projects.vitest.test.ts` covers query skipping during auth loading, unauthenticated state, and logout, authenticated detail/list arguments, changing recent-project limits, and optimistic rename cache updates/auth safeguards.
+
+## Project workspace and file explorer
+
+- `_auth/projects/route.tsx` owns the full-height project workspace: `NavBar` above an Allotment split with a conversation placeholder (400 px preferred, 200–800 px bounds, snappable) and the child route. It imports `allotment/dist/style.css`. `__root.tsx` no longer renders the global `Header`; individual pages/layouts own their navigation.
+- `features/projects/components/navbar.tsx` provides the home breadcrumb, inline project rename, import status, and user menu. Rename saves trimmed, nonempty, changed names on blur/Enter, cancels on Escape, guards duplicate submissions, disables edits while saving, and reports failures via toast. Importing shows a spinner; completed import shows an updated-time tooltip. These indicators do not implement an import workflow.
+- `project-id-view.tsx` owns code/preview switching and a second Allotment split (350 px preferred file sidebar, 200–800 px bounds). Both views stay mounted and toggle visibility. The code view displays selected file text in a read-only `pre`, not an editable code editor; preview and Export remain placeholders. Selection is scoped to the current project, rename updates the selected filename after success, and deleting a selected file or its ancestor clears selection. Preserve ancestor IDs passed by the tree.
+- `components/file-explorer/` owns `FileExplorer` (`index.tsx`), recursive `Tree`, `TreeItemWrapper`, TanStack Form create/rename inputs, loading rows, and shared indentation constants. Root/folders start collapsed; folder queries run only while expanded. Root controls create files/folders and collapse the tree; folder context menus create children, and all persisted rows offer rename/permanent delete. File clicks open text; Enter on a focused row starts rename. The displayed `Cmd + Backspace` delete hint has no registered keyboard handler.
+- Create/rename inputs trim names, cancel empty values or Escape, submit on Enter/blur, and guard late blur/double submissions. Inputs are read-only while submitting; failures toast and allow retry/refocus. New text files start with empty content. Icons use `@react-symbols/icons/utils`; shared Button's `highlight` variant styles explorer controls.
+- `hooks/use-files.ts` wraps folder queries and create-file/create-folder/rename/delete mutations. `useFolderContents` gates only on its `enabled` option, not `useConvexAuth`; it relies on the protected layout for mounting and backend ownership enforcement. `file-optimistic-updates.ts` updates only loaded `getFolderContents` caches: creation targets the exact project/parent, rename re-sorts, and deletion removes all known cached descendants regardless of query order. Keep folders first and names sorted with `localeCompare`, matching the backend.
+- Optimistic rows use stable `optimistic:` IDs derived from project/parent/type/name so Convex update replay preserves row identity. Never send these temporary IDs to the backend: pending rows and context actions are disabled, and temporary folders cannot query children. Convex rolls back optimistic cache changes on mutation failure; selection rename/delete callbacks run only after success.
+- `packages/backend/convex/schema.ts` defines `files` with required `projectId`, `name`, `type` (`file`/`folder`), and `updatedAt`; optional `parentId` denotes nesting (absent for root), `content` stores text, and `storageId` references binaries. Preserve existing indexes `by_project`, `by_parent`, and `by_project_parent` used by file queries.
+- `convex/files.ts` exposes authenticated `getFiles`, `getFile`, `getFolderContents`, `createFile`, `createFolder`, `renameFile`, `deleteFile`, and `updateFile`, checking project ownership server-side. Note the current `getFile` argument is misleadingly named `projectId` but accepts `Id<"files">`. Folder queries sort folders first then names; duplicate checks are case-sensitive and scoped to project/parent/type, so a file and folder can share a name. Every write touches the owning project's `updatedAt`; deletion recursively removes descendants and any referenced storage blobs.
+- Current backend file operations use unbounded `.collect()` reads and recursive deletion in one mutation; do not assume pagination or large-tree batching exists. Parent existence/type/project validation and backend filename trimming/empty-name rejection are not currently implemented. Keep these limitations in mind rather than relying on frontend validation for authorization or extending the unbounded patterns.
+- Explorer tests live in `components/file-explorer/inputs.vitest.test.tsx` and `tree.vitest.test.tsx`; optimistic cache tests live in `hooks/use-files.vitest.test.ts`. `components/project-id-view.vitest.test.tsx` verifies selected-file rename/delete behavior, including ancestor deletion.
 
 ## Durable AI agent
 
@@ -149,7 +163,7 @@ pursor/
 │           ├── start.ts               # Global Start request middleware for server error capture
 │           ├── app/
 │           │   ├── components/
-│           │   │   ├── header.tsx     # App navigation and theme toggle
+│           │   │   ├── header.tsx     # Legacy header; no longer mounted by the root
 │           │   │   ├── loader.tsx     # Router pending state
 │           │   │   └── mode-toggle.tsx # Light/dark/system theme menu
 │           │   ├── providers/
@@ -173,12 +187,28 @@ pursor/
 │           │   │   └── auth-routes.vitest.test.ts # Protected loaders and login redirects
 │           │   ├── projects/
 │           │   │   ├── components/
+│           │   │   │   ├── file-explorer/
+│           │   │   │   │   ├── index.tsx # Root explorer, creation controls, collapse-all
+│           │   │   │   │   ├── tree.tsx # Lazy recursive folders and file actions
+│           │   │   │   │   ├── tree-item-wrapper.tsx # Row button and context menu
+│           │   │   │   │   ├── create-input.tsx # TanStack Form inline creation
+│           │   │   │   │   ├── rename-input.tsx # TanStack Form inline rename
+│           │   │   │   │   ├── constants.ts # Shared row indentation
+│           │   │   │   │   ├── loading-row.tsx
+│           │   │   │   │   ├── inputs.vitest.test.tsx # Submit/cancel/retry safeguards
+│           │   │   │   │   └── tree.vitest.test.tsx # Tree actions and pending rows
+│           │   │   │   ├── navbar.tsx # Breadcrumb, inline rename, import status, user menu
 │           │   │   │   ├── project-command-dialog.tsx # Bounded project search and navigation
+│           │   │   │   ├── project-id-view.tsx # Code/preview split and read-only file selection
+│           │   │   │   ├── project-id-view.vitest.test.tsx # Selection rename/delete tests
 │           │   │   │   ├── projects-list.tsx # Continue card, recent links, search shortcut
 │           │   │   │   └── projects-view.tsx # Project creation, import placeholder, search dialog
 │           │   │   └── hooks/
-│           │   │       ├── use-projects.ts # Auth-gated queries and optimistic creation
-│           │   │       └── use-projects.vitest.test.ts # Query auth gating and limits
+│           │   │       ├── file-optimistic-updates.ts # Folder-cache create/rename/recursive delete
+│           │   │       ├── use-files.ts # Lazy folder queries and optimistic mutations
+│           │   │       ├── use-files.vitest.test.ts # Optimistic sorting, isolation, replay, deletion
+│           │   │       ├── use-projects.ts # Auth-gated queries and optimistic creation/rename
+│           │   │       └── use-projects.vitest.test.ts # Query auth gating, limits, rename caches
 │           │   └── research/
 │           │       ├── components/
 │           │       │   ├── research-chat.tsx # Conversation reset/lifecycle
@@ -196,7 +226,9 @@ pursor/
 │               │   ├── route.tsx      # Shared beforeLoad auth guard, live auth gating, session loading
 │               │   ├── index.tsx      # Protected Projects home page at /
 │               │   ├── dashboard.tsx  # Authenticated Context.dev chat playground
-│               │   └── projects.$projectId.tsx # Protected project detail placeholder
+│               │   └── projects/
+│               │       ├── route.tsx # Navbar and resizable conversation/workspace layout
+│               │       └── $projectId.tsx # Typed project parameter and ProjectIdView
 │               └── api/auth/
 │                   └── $.ts           # GET/POST Better Auth route
 └── packages/
@@ -217,6 +249,7 @@ pursor/
     │       ├── auth.config.ts         # Better Auth provider config
     │       ├── auth.ts                # Better Auth, optional GitHub OAuth, current-user query
     │       ├── convex.config.ts       # Better Auth, Agent, Workflow, Context.dev, PostHog + typed env
+    │       ├── files.ts               # Owned file/folder queries, CRUD, recursive deletion
     │       ├── healthCheck.ts         # Public health query
     │       ├── http.ts                # Registers auth HTTP routes
     │       ├── lib/
@@ -228,8 +261,8 @@ pursor/
     │       ├── researchGeneration.ts  # Node model/tool generation, streaming, telemetry, trace finalization
     │       ├── researchTelemetry.ts   # Validated turn attempts + internal turn lookup
     │       ├── researchTelemetry.test.ts # convex-test attempt validation and completion idempotency
-    │       ├── projects.ts            # Authenticated project creation and bounded owner lists
-    │       ├── schema.ts              # chatSessions, researchTurns, and owner-indexed projects
+    │       ├── projects.ts            # Owned creation, bounded lists, detail, rename
+    │       ├── schema.ts              # chatSessions, researchTurns, projects, nested files
     │       ├── tsconfig.json
     │       └── _generated/            # Ignored Convex API/types + ai/guidelines.md
     ├── config/
