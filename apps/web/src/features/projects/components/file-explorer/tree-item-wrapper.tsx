@@ -15,6 +15,7 @@ export const TreeItemWrapper = ({
   children,
   level,
   isActive,
+  disabled = false,
   onClick,
   onDoubleClick,
   onRename,
@@ -26,6 +27,7 @@ export const TreeItemWrapper = ({
   children: React.ReactNode;
   level: number;
   isActive?: boolean;
+  disabled?: boolean;
   onClick?: () => void;
   onDoubleClick?: () => void;
   onRename?: () => void;
@@ -37,6 +39,8 @@ export const TreeItemWrapper = ({
     <ContextMenu>
       <ContextMenuTrigger>
         <button
+          type="button"
+          disabled={disabled}
           onClick={onClick}
           onDoubleClick={onDoubleClick}
           onKeyDown={(e) => {
@@ -48,6 +52,7 @@ export const TreeItemWrapper = ({
           className={cn(
             "group flex items-center gap-1 w-full h-5.5 hover:bg-accent/50 outline-none focus:ring-1 focus:ring-inset focus:ring-ring",
             isActive && "bg-accent/30",
+            disabled && "opacity-50",
           )}
           style={{ paddingLeft: getItemPadding(level, item.type === "file") }}
         >
@@ -57,20 +62,20 @@ export const TreeItemWrapper = ({
       <ContextMenuContent finalFocus={false} className="w-64">
         {item.type === "folder" && (
           <>
-            <ContextMenuItem onClick={onCreateFile} className="text-sm">
+            <ContextMenuItem disabled={disabled} onClick={onCreateFile} className="text-sm">
               New File
             </ContextMenuItem>
-            <ContextMenuItem onClick={onCreateFolder} className="text-sm">
+            <ContextMenuItem disabled={disabled} onClick={onCreateFolder} className="text-sm">
               New Folder
             </ContextMenuItem>
             <ContextMenuSeparator />
           </>
         )}
-        <ContextMenuItem onClick={onRename} className="text-sm">
+        <ContextMenuItem disabled={disabled} onClick={onRename} className="text-sm">
           Rename
           <ContextMenuShortcut>Enter</ContextMenuShortcut>
         </ContextMenuItem>
-        <ContextMenuItem onClick={onDelete} className="text-sm">
+        <ContextMenuItem disabled={disabled} onClick={onDelete} className="text-sm">
           Delete Permanently
           <ContextMenuShortcut>Cmd + Backspace</ContextMenuShortcut>
         </ContextMenuItem>

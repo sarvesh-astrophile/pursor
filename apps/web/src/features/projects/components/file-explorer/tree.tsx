@@ -17,6 +17,7 @@ import { Id, Doc } from "@pursor/backend/convex/_generated/dataModel";
 import { useState } from "react";
 import { toast } from "sonner";
 import { TreeItemWrapper } from "./tree-item-wrapper";
+import { isOptimisticFile } from "../../hooks/file-optimistic-updates";
 
 export const Tree = ({
   item,
@@ -41,6 +42,7 @@ export const Tree = ({
   const [isRenaming, setIsRenaming] = useState(false);
   const [creating, setCreating] = useState<"file" | "folder" | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const isTemporary = isOptimisticFile(item._id);
 
   const renameFile = useRenameFile();
   const deleteFile = useDeleteFile();
@@ -49,7 +51,7 @@ export const Tree = ({
   const folderContents = useFolderContents({
     projectId,
     parentId: item._id,
-    enabled: item.type === "folder" && isOpen,
+    enabled: item.type === "folder" && isOpen && !isTemporary,
   });
 
   const handleCreate = async (name: string) => {
@@ -107,6 +109,7 @@ export const Tree = ({
         item={item}
         level={level}
         isActive={activeFileId === item._id}
+        disabled={isTemporary || isDeleting}
         onClick={() => onOpenFile?.(item, ancestorIds)}
         onDoubleClick={() => onOpenFile?.(item, ancestorIds)}
         onRename={() => setIsRenaming(true)}
@@ -138,6 +141,7 @@ export const Tree = ({
           <TreeItemWrapper
             item={item}
             level={level}
+            disabled={isTemporary || isDeleting}
             onClick={() => setIsOpen((value) => !value)}
             onRename={() => setIsRenaming(true)}
             onDelete={() => void handleDelete()}

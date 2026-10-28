@@ -31,6 +31,7 @@ vi.mock("./tree-item-wrapper", () => ({
     onCreateFile,
     onCreateFolder,
     isActive,
+    disabled,
   }: {
     children: React.ReactNode;
     onClick?: () => void;
@@ -39,15 +40,28 @@ vi.mock("./tree-item-wrapper", () => ({
     onCreateFile?: () => void;
     onCreateFolder?: () => void;
     isActive?: boolean;
+    disabled?: boolean;
   }) => (
     <div>
-      <button onClick={onClick} aria-pressed={!!isActive}>
+      <button disabled={disabled} onClick={onClick} aria-pressed={!!isActive}>
         {children}
       </button>
-      <button onClick={onRename}>Rename</button>
-      <button onClick={onDelete}>Delete</button>
-      {onCreateFile && <button onClick={onCreateFile}>New File</button>}
-      {onCreateFolder && <button onClick={onCreateFolder}>New Folder</button>}
+      <button disabled={disabled} onClick={onRename}>
+        Rename
+      </button>
+      <button disabled={disabled} onClick={onDelete}>
+        Delete
+      </button>
+      {onCreateFile && (
+        <button disabled={disabled} onClick={onCreateFile}>
+          New File
+        </button>
+      )}
+      {onCreateFolder && (
+        <button disabled={disabled} onClick={onCreateFolder}>
+          New Folder
+        </button>
+      )}
     </div>
   ),
 }));
@@ -73,6 +87,26 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Tree", () => {
+  it.each([file, folder])("disables actions on temporary $type rows", (item) => {
+    const onOpenFile = vi.fn();
+    render(
+      <Tree
+        item={{ ...item, _id: "optimistic:temporary" as Id<"files"> }}
+        projectId={projectId}
+        onOpenFile={onOpenFile}
+      />,
+    );
+    for (const button of screen.getAllByRole("button")) {
+      expect((button as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.click(button);
+    }
+    expect(onOpenFile).not.toHaveBeenCalled();
+    expect(mocks.createFile).not.toHaveBeenCalled();
+    expect(mocks.createFolder).not.toHaveBeenCalled();
+    expect(mocks.renameFile).not.toHaveBeenCalled();
+    expect(mocks.deleteFile).not.toHaveBeenCalled();
+    expect(mocks.contents).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }));
+  });
   it("does not display a creation input when expanding a folder", () => {
     render(<Tree item={folder} projectId={projectId} />);
     fireEvent.click(screen.getByRole("button", { name: "src" }));
