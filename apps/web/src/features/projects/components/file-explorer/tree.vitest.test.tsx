@@ -125,7 +125,7 @@ describe("Tree", () => {
     fireEvent.change(input, { target: { value: "child.ts" } });
     fireEvent.keyDown(input, { key: "Enter" });
     fireEvent.blur(input);
-    expect(mocks.createFile).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mocks.createFile).toHaveBeenCalledTimes(1));
     await act(async () => reject(new Error("Duplicate name")));
     expect(mocks.error).toHaveBeenCalledWith("Duplicate name");
     expect(input.value).toBe("child.ts");
