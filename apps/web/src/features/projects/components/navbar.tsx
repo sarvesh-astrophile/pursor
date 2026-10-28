@@ -25,7 +25,7 @@ const formatTimeStamp = (timestamp: number) => {
 
 export function NavBar({ projectId }: { projectId: Id<"projects"> }) {
   const project = useProjectById(projectId);
-  const renameProject = useRenameProject(projectId);
+  const renameProject = useRenameProject();
   const [isRenaming, setIsRenaming] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const editing = useRef(false);
@@ -46,7 +46,7 @@ export function NavBar({ projectId }: { projectId: Id<"projects"> }) {
 
     setIsSaving(true);
     try {
-      await renameProject({ name });
+      await renameProject({ id: projectId, name });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to rename project.");
     } finally {

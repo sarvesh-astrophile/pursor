@@ -143,7 +143,7 @@ test("creation prepends to full and partial lists without exceeding their bounds
 
 test("rename updates the mutation's project in detail and all lists without reordering", () => {
   authenticate();
-  renderHook(() => useRenameProject("target" as Id<"projects">));
+  renderHook(() => useRenameProject());
   const projects = [project("first", 3), project("target", 2), project("last", 1)];
   const { store, full, detail } = projectStore(projects);
 
@@ -184,22 +184,20 @@ test("optimistic updates wait for the current user", () => {
   expect(store.setQuery).not.toHaveBeenCalled();
 
   state.withOptimisticUpdate.mockClear();
-  renderHook(() => useRenameProject("target" as Id<"projects">));
+  renderHook(() => useRenameProject());
   optimisticUpdate()(store, { id: "target" as Id<"projects">, name: "Renamed" });
   expect(store.setQuery).not.toHaveBeenCalled();
 });
 
-test("rename binds the project ID and updates it when the hook's ID changes", async () => {
+test("rename returns the mutation and accepts a project ID per call", async () => {
   authenticate();
   const mutate = vi.fn().mockResolvedValue(null);
   state.withOptimisticUpdate.mockReturnValue(mutate);
-  const { result, rerender } = renderHook(({ id }) => useRenameProject(id), {
-    initialProps: { id: "first" as Id<"projects"> },
-  });
-  await result.current({ name: "First name" });
+  const { result } = renderHook(() => useRenameProject());
+  expect(result.current).toBe(mutate);
+  await result.current({ id: "first" as Id<"projects">, name: "First name" });
   expect(mutate).toHaveBeenLastCalledWith({ id: "first", name: "First name" });
 
-  rerender({ id: "second" as Id<"projects"> });
-  await result.current({ name: "Second name" });
+  await result.current({ id: "second" as Id<"projects">, name: "Second name" });
   expect(mutate).toHaveBeenLastCalledWith({ id: "second", name: "Second name" });
 });
